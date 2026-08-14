@@ -1,0 +1,7 @@
+- [Project lineage: poissongamma-efe](project-lineage-poissongamma-efe.md) — the framework, the code and the settled framing decisions live in the predecessor repo, not here.
+- [Sichel is the starting point](sichel-is-the-starting-point.md) — the subject is active sensing for overdispersed counts, seeded by the GIG-Poisson member the predecessor never implemented.
+- [Overdispersion has two readings](overdispersion-has-two-readings.md) — fixed unknown rate or random effect per read; unsettled, and it decides the baselines.
+- [Bulk sampling is the application](bulk-sampling-is-the-application.md) — the applied experiment is diamond bulk sampling; keep the volume budget and the per-cost normalisation.
+- [Budget scarcity decides whether acquisition matters](budget-scarcity-decides-whether-acquisition-matters.md) — nothing separates under an abundant budget; section 5.2's numbers are regime-specific.
+- [Three real rate fields decide the model question](three-real-rate-fields.md) — the fitted GIG order predicts whether the third parameter is needed; check it before designing anything.
+- [Use \claude{} todonotes for comments](use-claude-todonote-for-comments.md) — leave draft annotations as rendered todonotes, not % comments.

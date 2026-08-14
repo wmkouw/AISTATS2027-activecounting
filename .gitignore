@@ -1,0 +1,12 @@
+# local
+template/
+__pycache__/
+
+# latex
+*.aux
+*.bbl
+*.fls
+*.log
+*.blg
+*.fbd_latexmk
+*.synctex.gz
