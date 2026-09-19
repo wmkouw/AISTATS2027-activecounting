@@ -1,12 +1,14 @@
-# local
-template/
-__pycache__/
-
-# latex
+# Latex
 *.aux
 *.bbl
+*.blg
 *.fls
 *.log
-*.blg
-*.fbd_latexmk
 *.synctex.gz
+*.swp
+
+# Local
+*__pycache__/
+literature/
+template/
+archive/

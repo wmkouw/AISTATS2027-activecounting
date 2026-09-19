@@ -5,3 +5,5 @@
 - [Budget scarcity decides whether acquisition matters](budget-scarcity-decides-whether-acquisition-matters.md) — nothing separates under an abundant budget; section 5.2's numbers are regime-specific.
 - [Three real rate fields decide the model question](three-real-rate-fields.md) — the fitted GIG order predicts whether the third parameter is needed; check it before designing anything.
 - [Use \claude{} todonotes for comments](use-claude-todonote-for-comments.md) — leave draft annotations as rendered todonotes, not % comments.
+- [Acquisition axis cannot separate](acquisition-axis-cannot-separate.md) — four probes failed to beat D-optimality; ceiling ~0.006 nats vs the model axis 0.049, so lead with the model.
+- [Pooled fits overstate the third parameter](pooled-fits-overstate-the-third-parameter.md) — §5.4 fits pooled but agents carry stratified priors; Safecast is mostly a pooling artifact, Fermi survives.

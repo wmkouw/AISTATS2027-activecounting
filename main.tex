@@ -94,9 +94,9 @@
 
 \aistatstitle{Actively sensing overdispersed count data\\ with Sichel distributed predictions}
 
-\aistatsauthor{Wouter M. Kouw}
+\aistatsauthor{Anonymous Author}
 
-\aistatsaddress{Eindhoven University of Technology} ]
+\aistatsaddress{Anonymous Institution} ]
 
 \begin{abstract}
 Instruments that count photons, stones or events return data whose variance exceeds its mean, and the experimenter usually controls how long to count for.
@@ -136,6 +136,7 @@ Finally we ask what the model and the acquisition are each worth.
 Fitted to three measured fields of rates, the third parameter is decisive on the two on which counting is a physical process and worthless on the one on which it is not, and the fitted order of the mixing law identifies which case one is in before any sensing is designed (Section~\ref{sec:experiments_fields}).
 In allocation studies on two problems, the choice of acquisition is worth nothing until the budget is too small to cover the contexts, and is worth a great deal after that (Sections~\ref{sec:experiments_bulk} and \ref{sec:experiments_photon}).
 \claude{Contribution list is deliberately modest about the acquisition. Our criterion ties EPIG and D-optimality on accuracy in every setting we ran; what it wins on is cost. Worth deciding whether the title should follow the evidence and lead with the model rather than the sensing.}
+\claude{Section~\ref{sec:inference_acquisition} now defines the criterion, and says plainly that neither term of \eqref{eq:eig} is a closed form: the predictive entropy is a truncated support sum and the aleatoric term a quadrature. The abstract still says ``available in closed form'' and the conclusion repeats it. Those two sentences now contradict the body and need rewording to ``deterministic, free of Monte-Carlo error and of nesting bias''. Same paragraph carries the cost claim that Table~\ref{tab:bulk} contradicts: D-optimality matches our accuracy at $0.5$\,ms against our $8.8$.}
 
 
 \section{PROBLEM STATEMENT}
@@ -151,7 +152,8 @@ We assume the counts are Poisson distributed under a rate variable. Our likeliho
     \label{eq:likelihood}
 \end{equation}
 %
-where $\mathcal{P}$ refers to a Poisson distribution function, $\lambda(x) > 0$ is the unknown emission rate at context $x$, and $f: \mathcal{U} \to [0, \infty)$ is an exposure variable. Examples of exposures include the dwell time of a detector, the integration time of a spectrometer, the aperture of a telescope, or the known attenuation between a source and a sensor \citep{}.
+where $\mathcal{P}$ refers to a Poisson distribution function, $\lambda(x) > 0$ is the unknown emission rate at context $x$, and $f: \mathcal{U} \to [0, \infty)$ is an exposure variable. Examples of exposures include the dwell time of a detector, the integration time of a spectrometer, the aperture of a telescope, or the known attenuation between a source and a sensor.
+\claude{An empty \texttt{\textbackslash citep\{\}} stood here. Removed rather than guessed; if a reference for the exposure examples is wanted it needs to come through Zotero.}
 
 \begin{assumption}[Multiplicative exposure]
     \label{as:exposure}
@@ -368,6 +370,48 @@ The support of \eqref{eq:sichel} is unbounded, so a functional of the predictive
     Analytic tractability and numerical reliability are different properties, and only the first is settled by Proposition~\ref{prop:predictive}.
 \end{remark}
 
+\subsection{Scoring a Candidate Input}
+\label{sec:inference_acquisition}
+
+The sensor scores a candidate by the information the count it returns is expected to carry about the rate \citep{lindley1956measure,houlsby2011bald}, that is by the mutual information between $\lambda$ and $y$ under the current belief,
+%
+\begin{equation}
+    \begin{split}
+        G(u) &= \Ex{p(y \given u, \mathcal{D})}{ D_{\text{KL}}\big[ p(\lambda \given y, u, \mathcal{D}) \,\|\, p(\lambda \given \mathcal{D}) \big] } \\
+        &= H\big[ p(y \given u, \mathcal{D}) \big] - A(u) \,,
+    \end{split}
+    \label{eq:eig}
+\end{equation}
+%
+where the second line is the standard rearrangement of the expected Kullback-Leibler divergence into a predictive entropy less an expected conditional entropy,
+%
+\begin{equation}
+    A(u) = \Ex{p(\lambda \given \mathcal{D})}{ H\big[ \mathcal{P}\big(y \given f(u) \lambda \big) \big] } \,.
+    \label{eq:aleatoric}
+\end{equation}
+
+\begin{proposition}[Two deterministic quadratures]
+    \label{prop:eig}
+    Under \eqref{eq:likelihood} and \eqref{eq:gig}, both terms of \eqref{eq:eig} are integrals against known densities and neither requires a sample.
+    The first is a sum of \eqref{eq:sichel} over the support of the predictive; the second is a one-dimensional integral of the Poisson entropy against the belief \eqref{eq:gig}.
+\end{proposition}
+
+Neither term is a closed form.
+The support of \eqref{eq:sichel} is unbounded, so $H[p(y \given u, \mathcal{D})]$ is a sum truncated at a fixed tail tolerance, and the Poisson entropy inside \eqref{eq:aleatoric} has no elementary expression, so $A(u)$ is a quadrature.
+What Proposition~\ref{prop:eig} does buy is that both are \emph{deterministic}.
+The value of \eqref{eq:eig} carries no Monte-Carlo error, has no sample size to tune, and in particular no nesting bias, which is what an estimator of the same quantity outside a conjugate family has to accept \citep{rainforth2018nesting,rainforth2024modern}.
+We report the cost of that difference in Section~\ref{sec:experiments_bulk}.
+
+Two things make the evaluation cheap enough to put inside a loop over candidates.
+The first is Proposition~\ref{prop:predictive}: every dependence of both terms on the input passes through the scalar $f(u)$, so the belief-level quantities are computed once and a grid of candidates costs one pass apiece with nothing re-solved.
+The second is that \eqref{eq:aleatoric} is an integral over a single positive variable, which is the whole of the parameter addressed by the input.
+In our implementation the support sum of the first term is truncated at a tail mass of $10^{-13}$, sized from the predictive moments of \eqref{eq:predictive_mean} and \eqref{eq:predictive_variance} and widened until the tolerance is met, since a normal-tail estimate is not conservative for a heavy-tailed law; the second is a $64$-node Gauss-Legendre rule in $\log \lambda$, over the bracket on which the log-density of \eqref{eq:gig} has fallen $75$ nats from its mode.
+Both are accumulated in logarithms, for the reason Remark~\ref{rem:conditioning} gives.
+
+The decomposition in \eqref{eq:eig} is also what separates the criteria compared in Section~\ref{sec:experiments}.
+A criterion that scores an input by the predictive entropy alone, as maximum entropy sampling does \citep{sebastiani2000maximum}, is \eqref{eq:eig} with $A(u)$ dropped.
+By \eqref{eq:fano} the aleatoric term grows with the mean of the count, so dropping it rewards an input for the noise it collects rather than for the uncertainty it removes, and Section~\ref{sec:experiments_bulk} shows what that costs.
+
 \section{EXPERIMENTS}
 \label{sec:experiments}
 
@@ -526,7 +570,7 @@ An adaptive schedule therefore earns its keep exactly when the budget cannot cov
 \end{table}
 
 Every rate in the previous section is drawn from the law of Section~\ref{sec:model_prior}, so a model assuming that law is correct by construction.
-Here the rates are the photon fluxes of $5065$ sources in the Fermi Large Area Telescope fourth source catalogue \citep{abdollahi2020fermi}, and the instrument that measured them is a photon counter, so the counting model of Section~\ref{sec:model_observation} is the measurement process rather than an analogy.
+Here the rates are the photon fluxes of $5065$ sources in the Fermi Large Area Telescope fourth source catalogue \citep{abdollahi2020fermi}, and the instrument that measured them is a photon counter, so the counting model of Section~\ref{sec:model} is the measurement process rather than an analogy.
 A pointed observation looks at one target at a time and the expected number of photons is the flux times the effective area times the time on target, so $f(u) = A_{\text{eff}} t$ and the budget is spent in megaseconds.
 Priors are conditioned on the catalogue's source class, which an observer knows before pointing and which matters: pulsars have a median flux twelve times that of blazar candidates and a variance-to-mean ratio twelve hundred times larger.
 The catalogue is split within each class, so priors are fitted to one half and sources drawn from the other.
@@ -636,12 +680,6 @@ Whether the third parameter is worth its cost is a question about the field bein
 \section*{Checklist}
 
 
-% %%% BEGIN INSTRUCTIONS %%%
-The checklist follows the references. For each question, choose your answer from the three possible options: Yes, No, Not Applicable.  You are encouraged to include a justification to your answer, either by referencing the appropriate section of your paper or providing a brief inline description (1-2 sentences). 
-Please do not modify the questions.  Note that the Checklist section does not count towards the page limit. Not including the checklist in the first submission won't result in desk rejection, although in such case we will ask you to upload it during the author response period and include it in camera ready (if accepted).
-
-\textbf{In your paper, please delete this instructions block and only keep the Checklist section heading above along with the questions/answers below.}
-% %%% END INSTRUCTIONS %%%
 
 
 \begin{enumerate}
@@ -692,17 +730,7 @@ Please do not modify the questions.  Note that the Checklist section does not co
 
 % Supplementary material: To improve readability, you must use a single-column format for the supplementary material.
 \onecolumn
-\aistatstitle{Instructions for Paper Submissions to AISTATS 2026: \\
-Supplementary Materials}
-
-Note: You can choose whether the include you appendices as part of the main submission file (here) OR submit them separately as part of the supplementary material. It is the authors' responsibility that any supplementary material does not conflict in content with the main paper (e.g., the separately uploaded additional material is not an updated version of the one appended to the manuscript).
-
-\section{FORMATTING INSTRUCTIONS}
-
-The appendices follow the same formatting instructions as in the main paper.
-The only difference is that the supplementary material must be in a \emph{single-column} format.
-
-Note that reviewers are under no obligation to examine your supplementary material.
+\aistatstitle{Actively sensing overdispersed count data\\ with Sichel distributed predictions:\\ Supplementary Materials}
 
 \section{PROOF OF POSTERIOR CONSISTENCY}
 \label{appx:consistency}
@@ -900,14 +928,6 @@ that predictive is itself a quadrature over a grid posterior when the model is n
 conjugate. The nesting costs more than the rest of the study combined, which is a statement
 about non-conjugacy rather than about the criterion, and it is recorded here rather than
 passed over.
-
-\section{ADDITIONAL EXPERIMENTS}
-
-If you have additional experimental results, you may include them in the supplementary materials.
-
-\subsection{Effect of the Regularization Parameter}
-
-\textit{Our algorithm depends on the regularization parameter $\lambda$. Figure 1 below illustrates the effect of this parameter on the performance of our algorithm. As we can see, [ ... ]}
 
 
 \end{document}
