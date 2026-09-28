@@ -1,28 +1,30 @@
 \documentclass[twoside]{article}
 
-\usepackage{aistats2026}
+\usepackage{aistats2027}
 % If your paper is accepted, change the options for the package
-% aistats2026 as follows:
+% aistats2027 as follows:
 %
-%\usepackage[accepted]{aistats2026}
+%\usepackage[accepted]{aistats2027}
 %
 % This option will print headings for the title of your paper and
 % headings for the authors names, plus a copyright note at the end of
 % the first column of the first page.
 
-% We also include a `preprint' option for non-anonymous preprints. 
-% Change the options for the package aistats2026 as follows:
+% We also include a `preprint' option for non-anonymous preprints.
+% Change the options for the package aistats2027 as follows:
 %
-%\usepackage[preprint]{aistats2026}
+%\usepackage[preprint]{aistats2027}
 %
 % This option will print headings for the title of your paper and
 % headings for the authors names, but does not print the copyright and 
 % venue note at the end of the first column of the first page.
 
-% If you set papersize explicitly, activate the following three lines:
-%\special{papersize = 8.5in, 11in}
-%\setlength{\pdfpageheight}{11in}
-%\setlength{\pdfpagewidth}{8.5in}
+% Submissions have to follow US letter format.
+% In case your local TeX installation defaults to A4, you will need to
+% set papersize explicitly by activating the following three lines:
+% \special{papersize = 8.5in, 11in}
+% \setlength{\pdfpageheight}{11in}
+% \setlength{\pdfpagewidth}{8.5in}
 
 % If you use the natbib package, activate the following three lines:
 %\usepackage[round]{natbib}
@@ -40,8 +42,19 @@
 \usepackage{booktabs}
 \usepackage{multirow}
 
-\usepackage[disable]{todonotes}
-% \usepackage[]{todonotes}
+% Float placement. The defaults reserve a fifth of every page for text and refuse a page
+% more than 70 per cent float, which on a paper with eight floats in the body defers them
+% and leaves gaps behind. These let a page carry the float it belongs with. Nothing about
+% the typography changes: same font, same measure, same leading.
+\renewcommand{\topfraction}{0.9}
+\renewcommand{\bottomfraction}{0.8}
+\renewcommand{\textfraction}{0.07}
+\renewcommand{\floatpagefraction}{0.75}
+\setcounter{topnumber}{3}
+\setcounter{totalnumber}{4}
+
+%\usepackage[disable]{todonotes}
+ \usepackage[]{todonotes}
 \newcommand{\wmk}[2][] {\todo[inline,backgroundcolor=green!20!white, #1]{(Wouter) #2}}
 \newcommand{\claude}[2][] {\todo[inline,backgroundcolor=blue!20!white, #1]{(Claude) #2}}
 
@@ -92,85 +105,72 @@
 
 \twocolumn[
 
-\aistatstitle{Actively sensing overdispersed count data\\ with Sichel distributed predictions}
+\aistatstitle{Sequential experimental design for overdispersed counts\\ with Sichel distributed predictions}
 
 \aistatsauthor{Anonymous Author}
 
 \aistatsaddress{Anonymous Institution} ]
 
 \begin{abstract}
-Instruments that count photons, stones or events return data whose variance exceeds its mean, and the experimenter usually controls how long to count for.
-We give a conjugate model for that situation: a Poisson likelihood whose rate carries a generalised inverse Gaussian prior, under actions that scale the rate by a known exposure.
-The posterior stays in the family, the predictive is the Sichel law, and the expected information gain of a candidate action is available in closed form as a difference of two quantities that each cost one univariate evaluation.
-We prove that the posterior concentrates on the true rate, with a condition on accumulated exposure rather than on the number of measurements, and we identify the arrangements in which the closed forms may actually be evaluated, since their Bessel functions overflow double precision at orders a belief reaches after a handful of counts.
-Fitted to three measured fields of rates, the third parameter is decisive on two physical counting fields and worth nothing on a linguistic one, and the fitted order of the mixing law says in advance which case one is in.
-In allocation studies the acquisition matters only when the budget cannot cover the contexts; criteria that ignore the aleatoric term then fail badly, while the closed form matches the best available alternatives at an order of magnitude less cost per decision.
+Overdispersed count rates refers to phenomena in which the count variance exceeds the average count rate. Examples include looking for diamonds in carbon-rich sedimentary layers, counting photons in gamma-ray observation, or the spike count rate in populations of neurons. We propose a procedure for sequential Bayesian experimental design under a Poisson likelihood whose rate is modulated multiplicatively with an exposure function. The prior distribution over the rate parameter is a generalized inverse Gaussian prior, which is conjugate and yields an exact posterior predictive distributed as the Sichel law. Expected information gain is then calculated from two deterministic quadrature operations, providing a faster alternative to nested Monte Carlo sampling.
+We show that the posterior concentrates if the accumulated exposure diverges, which is a persistence-of-excitation condition on exposure rather than on sample size. The proposed procedure is compared to state-of-the-art methods in three natural settings.
 \end{abstract}
 
-\section{INTRODUCTION}
+\section{Introduction}
 \label{sec:intro}
 
-A great many instruments work by counting.
-A detector records photons over a dwell time, a plant recovers stones from a volume of gravel, a survey meter accumulates events at a location.
-In each case the experimenter chooses how much of the process to observe before seeing what it returns, and the budget for that choice is finite: seconds of telescope time, cubic metres of gravel, hours in the field.
-Deciding where to spend it is an active sensing problem \citep{kreucher2005sensor,yu2009active}, and the natural score for a candidate is the information it is expected to carry \citep{lindley1956measure,chaloner1995bayesian}.
+Counting is fundamental to many fields of science and engineering. For example, in astronomy, photons are recorded over a period of time, and, in ecology, a camera trap counts the number of wolves passing by per week. In all these experiments, an experimenter has to choose how long the detector keeps counting, refered to as dwell time. Using the information obtained so far to optimize dwell time is called sequential optimal experimental design \citep{lindley1956measure,chaloner1995bayesian}. In phenomena with \emph{overdispersed} counts, the variance of the counts exceeds the average count. For example, in gamma ray observation, the detector will often pick up barely anything but occasionally it will detect millions of photons, which means its count variance is orders of magnitude larger than the average count. The overdispersed natura of these phenomena is a challenge for sequential experimental design.
 
-Two things make counts awkward.
-The first is that they are almost never as regular as a Poisson process: the variance exceeds the mean, often by orders of magnitude, because the underlying rate varies across the contexts being sensed.
-The second is that the expected information gain of a candidate action is an expectation of a Kullback-Leibler divergence over a predictive distribution, and outside a conjugate family it has to be estimated by nested Monte Carlo, which is expensive and biased \citep{rainforth2018nesting,rainforth2024modern}.
-Conjugate models avoid the second problem, and the conjugate model for counts is the gamma-Poisson pair, whose predictive is negative binomial.
-That family has a free mean and a free variance, so overdispersion alone is no reason to leave it.
-What it does not have is a third parameter: once its first two moments are fixed, its tail is determined.
+The expected information gain is an expectation of a Kullback-Leibler divergence over a predictive distribution \citep{ryan2016review,huan2024optimal}. In a conjugate family such as Gamma-Poisson, the predictive is negative binomially distributed which lacks the expressiveness to capture tail probabilities accurately. Outside a conjugate family, the expected information gain must be estimated by nested Monte Carlo, which is computationally expensive and ill-suited for sequential design with short dwell times \citep{rainforth2018nesting,rainforth2024modern}. We opt to stay in a conjugate family, and will use the generalised inverse Gaussian distribution as a prior for the count rate. Its predictive is the Sichel distribution which has an additional parameter to describe tail probabilities and allows for deterministic quadrature procedures for calculating expected information gain \citep{sichel1975distribution,stein1987parameter}.
 
-This paper takes the generalised inverse Gaussian as the mixing law instead.
-It is conjugate to a Poisson likelihood, an action that scales the rate by a known exposure preserves that conjugacy, and the resulting predictive is the Sichel law \citep{sichel1975distribution,stein1987parameter}.
-The extra parameter buys exactly the freedom the gamma lacks, which the count-modelling literature has long identified as the reason to reach for the Sichel: data that are overdispersed, heavily skewed and inflated at zero at the same time.
-The distribution has been used to value diamond deposits, model word frequencies and fit species abundances.
-As far as we have found, it has not been used to decide which measurements to take.
+\paragraph{Related work.}
+In active learning the same quantity is BALD \citep{houlsby2011bald}, with maximum entropy sampling \citep{sebastiani2000maximum} dropping the aleatoric term and EPIG \citep{smith2023prediction} the prediction-oriented alternative; it also appears as sensor management \citep{kreucher2005sensor,hero2008information,yu2009active}, source search \citep{vergassola2007infotaxis,hutchinson2018entrotaxis} and astronomical scheduling \citep{loredo2004bayesian}.
+Across that work expected information gain is estimated rather than computed, and those estimators carry a bias no sample size removes \citep{rainforth2024modern}.
+We give a count family in which the quantity they approximate is available directly, taking a mixing law from the classical conjugate analysis of exponential families \citep{diaconis1979conjugate,gutierrez1997exponential,chen2003conjugate} with one parameter more.
 
-Our contributions are as follows.
-We set out the model and its two closed forms, the conjugate update and the Sichel predictive, and show that every dependence on the action passes through a single scalar, so scoring a grid of candidates costs one evaluation apiece (Sections~\ref{sec:model} and \ref{sec:inference}).
-We prove posterior consistency from an exact two-sided bound on a ratio of Bessel functions, with the condition falling on accumulated exposure rather than on the number of measurements, which for an adaptive sensor is a restriction on the policy rather than a formality (Proposition~\ref{prop:consistency}).
-We show that analytic tractability and numerical reliability are different properties here, and give the arrangements in which the closed forms survive evaluation (Remark~\ref{rem:conditioning}).
-Finally we ask what the model and the acquisition are each worth.
-Fitted to three measured fields of rates, the third parameter is decisive on the two on which counting is a physical process and worthless on the one on which it is not, and the fitted order of the mixing law identifies which case one is in before any sensing is designed (Section~\ref{sec:experiments_fields}).
-In allocation studies on two problems, the choice of acquisition is worth nothing until the budget is too small to cover the contexts, and is worth a great deal after that (Sections~\ref{sec:experiments_bulk} and \ref{sec:experiments_photon}).
-\claude{Contribution list is deliberately modest about the acquisition. Our criterion ties EPIG and D-optimality on accuracy in every setting we ran; what it wins on is cost. Worth deciding whether the title should follow the evidence and lead with the model rather than the sensing.}
-\claude{Section~\ref{sec:inference_acquisition} now defines the criterion, and says plainly that neither term of \eqref{eq:eig} is a closed form: the predictive entropy is a truncated support sum and the aleatoric term a quadrature. The abstract still says ``available in closed form'' and the conclusion repeats it. Those two sentences now contradict the body and need rewording to ``deterministic, free of Monte-Carlo error and of nesting bias''. Same paragraph carries the cost claim that Table~\ref{tab:bulk} contradicts: D-optimality matches our accuracy at $0.5$\,ms against our $8.8$.}
+%Proposition~\ref{prop:consistency} proves posterior consistency from an exact two-sided bound on a Bessel ratio, its condition falling on accumulated exposure rather than on the number of measurements, and Remark~\ref{rem:dopt} identifies local D-optimality as the leading term of the exact criterion, which predicts when the two must tie.
 
+\section{Problem statement} \label{sec:problem}
 
-\section{PROBLEM STATEMENT}
-We consider the problem of learning in a count data model where the rate parameters are a function of an input parameter. Let $y \in \mathcal{Y} \subseteq \mathbb{N}$ be the observed count variable, $x \in \mathcal{X} \subseteq \mathbb{R}^{D}$ and $u \in \mathcal{U}$ be the input variable. The goal is to predict the count observations $y$ at a given context latent state $x$ after input $u$.
+Let $y \in \mathbb{N}$ be a set of counts and $\tau \in [0, \infty)$ be a dwell time. There are $K$ contexts, with context $k$ emitting events at an unknown rate $\lambda_k$. A design $u = (k,\tau)$ is a context and dwell time selection. Designs are chosen one at a time, until the time budget is spent. Let $\mathcal{D}_t = \{(y_i, u_i)\}_{i=1}^{t}$ be the designs selected and counts observed up to time $t$, and $\mathcal{V} = \{(y_j, u_j)\}_{j=1}^{n}$ be a held out test set of designs and counts.
 
-\section{MODEL SPECIFICATION}
+There are three metrics of interest. First, data must be acquired such that the average surprisal on the test set is minimal. The surprisal is calculated as the negative log probability of test data under a posterior predictive distribution:
+\begin{equation}
+	S = \sum_{j=1}^{n} - \ln p(y_j \given u_j, \mathcal{D}_t) \, .
+\end{equation}
+Secondly, the model must identify as quickly as possible the context for which the count rate is maximal, $k^{*}$. That estimate is extracted from a posterior distribution over $\lambda_k$ that evolves over time, i.e., $\hat{k}_t = \arg \max_{k} p(\lambda_k \given \mathcal{D}_t)$. The goal is to minimize the regret up to time $T$,
+\begin{equation}
+	R = \sum_{t=1}^T | k^* - \hat{k}_t | \, .
+\end{equation}
+Lastly, we time models on the computational cost of inference, in terms of average number of seconds to select a new design.
+
+\section{Model specification}
 \label{sec:model}
 
-We assume the counts are Poisson distributed under a rate variable. Our likelihood is:
-%
+Counts are modelled as Poisson distributed with rate parameter $\lambda$,
 \begin{equation}
-    p(y \given x, u, \theta) = \mathcal{P}\Big(y \given f(u) \lambda(x)\Big) \,,
+    p(y \given u, \lambda_k) = \mathcal{P}\big(y \given f(u) \lambda_k \big) \,,
     \label{eq:likelihood}
 \end{equation}
-%
-where $\mathcal{P}$ refers to a Poisson distribution function, $\lambda(x) > 0$ is the unknown emission rate at context $x$, and $f: \mathcal{U} \to [0, \infty)$ is an exposure variable. Examples of exposures include the dwell time of a detector, the integration time of a spectrometer, the aperture of a telescope, or the known attenuation between a source and a sensor.
-\claude{An empty \texttt{\textbackslash citep\{\}} stood here. Removed rather than guessed; if a reference for the exposure examples is wanted it needs to come through Zotero.}
+and exposure function $f(u)$.
 
 \begin{assumption}[Multiplicative exposure]
     \label{as:exposure}
-    The input acts on the rate through a known scalar $f(u)$, which does not depend on the parameter $\theta$.
+    The action acts on the rate through a known scalar $f(u)$, which does not depend on the rates.
 \end{assumption}
 
-Assumption~\ref{as:exposure} carries the analytic results below, and it is worth naming what it excludes.
-An input rescales the rate of the context it addresses, so it decides how much is measured.
-It cannot change which parameter is measured, and no input renders one rate observable through another.
-Inputs of this kind set the size of an update rather than its direction.
+Assumption~\ref{as:exposure} carries the analytic results below: an action decides how much is measured and not which rate, and no action renders one rate observable through another.
+The rates are independent under the prior and the likelihood factorises across contexts, so the rest of this section treats a single context and writes $\lambda$ for its rate.
 
-The context set is taken to be finite, with $K$ elements, so that the parameter is the vector of rates $\theta = (\lambda_1, \dots, \lambda_K)$ and an input addresses one of them.
-These rates are independent under the prior and the likelihood factorises across contexts, so the remainder of this section treats a single context and writes $\lambda$ for the rate being addressed.
-\claude{A continuous context set couples the rates and breaks this factorisation. Flagged for the discussion.}
+The Fano factor is
+\begin{equation}
+    F(u) = 1 + f(u) \frac{\Var{p(\lambda)}{\lambda}}{\Ex{p(\lambda)}{\lambda}} \,.
+    \label{eq:fano}
+\end{equation}
 
-\subsection{Prior Over the Rate}
-\label{sec:model_prior}
+Two properties of \eqref{eq:fano} matter.
+First, the departure from equidispersion is a function of the action: a Poisson process has $F = 1$ everywhere, whereas here the second term grows linearly in the exposure, so how overdispersed the observations are is itself something the design decides.
+Second, a negative binomial already has a free mean and variance, so overdispersion alone is no reason to leave the conjugate pair; what \eqref{eq:gig} adds is a third parameter which, with the predictive mean and variance held fixed, still moves mass between the centre and the tail, which is why the count-modelling literature reaches for the Sichel on data at once overdispersed, skewed and inflated at zero.
 
 Write $\Gig$ for the generalised inverse Gaussian law,
 %
@@ -193,145 +193,98 @@ Its three parameters separate once $(a, b)$ is traded for a scale $\eta = \sqrt{
 %
 Requiring a particular mean fixes $\eta$ in closed form and leaves $\alpha$ and $\omega$ free, so the brightness of a context and the shape of the uncertainty about it are set independently.
 
-The gamma law is a boundary of this family rather than a competitor to it.
-As $\omega \to 0$ with $\alpha > 0$, \eqref{eq:gig} tends to a gamma law of shape $\alpha$ and rate $b/2$, and the marginal of \eqref{eq:likelihood} tends to a negative binomial, written $\NBin$.
-The conjugate Poisson pair is therefore contained in the model, at one edge of a parameter the model is otherwise free to move.
+The gamma is a boundary of this family rather than a competitor: as $\omega \to 0$ with $\alpha > 0$, \eqref{eq:gig} tends to a gamma of shape $\alpha$ and rate $b/2$ and the marginal of \eqref{eq:likelihood} to a negative binomial, written $\NBin$.
+The conjugate Poisson pair is therefore contained in the model, at one edge of a parameter it is otherwise free to move.
 
-\subsection{Predictive Dispersion}
-\label{sec:model_dispersion}
-
-Marginalising the rate out of \eqref{eq:likelihood} gives the Sichel law, written $\Sic$, whose mass function is a ratio of normalising constants of \eqref{eq:gig} and is deferred to Section~\ref{sec:inference}.
-Its first two moments follow from the laws of total expectation and variance without it,
+%\subsection{Predictive Dispersion}
+%\label{sec:model_dispersion}
 %
-\begin{align}
-    \Ex{p(y \given u)}{y} &= f(u) \Ex{p(\lambda)}{\lambda} \,, \label{eq:predictive_mean} \\
-    \Var{p(y \given u)}{y} &= f(u) \Ex{p(\lambda)}{\lambda} + f(u)^{2} \Var{p(\lambda)}{\lambda} \,, \label{eq:predictive_variance}
-\end{align}
+%Marginalising the rate out of \eqref{eq:likelihood} gives the Sichel law $\Sic$, whose mass function is a ratio of normalising constants of \eqref{eq:gig} and is deferred to Section~\ref{sec:inference}.
+%Its first two moments follow from total expectation and variance without it,
+%%
+%\begin{align}
+%    \Ex{p(y \given u)}{y} &= f(u) \Ex{p(\lambda)}{\lambda} \,, \label{eq:predictive_mean} \\
+%    \Var{p(y \given u)}{y} &= f(u) \Ex{p(\lambda)}{\lambda} + f(u)^{2} \Var{p(\lambda)}{\lambda} \,, \label{eq:predictive_variance}
+%\end{align}
+%%
+%so that their ratio, the Fano factor, is
+%%
+%\begin{equation}
+%    F(u) = 1 + f(u) \frac{\Var{p(\lambda)}{\lambda}}{\Ex{p(\lambda)}{\lambda}} \,.
+%    \label{eq:fano}
+%\end{equation}
 %
-so that their ratio, the Fano factor, is
+%Two properties of \eqref{eq:fano} matter.
+%First, the departure from equidispersion is a function of the action: a Poisson process has $F = 1$ everywhere, whereas here the second term grows linearly in the exposure, so how overdispersed the observations are is itself something the design decides.
+%Second, a negative binomial already has a free mean and variance, so overdispersion alone is no reason to leave the conjugate pair; what \eqref{eq:gig} adds is a third parameter which, with the predictive mean and variance held fixed, still moves mass between the centre and the tail, which is why the count-modelling literature reaches for the Sichel on data at once overdispersed, skewed and inflated at zero.
 %
-\begin{equation}
-    F(u) = 1 + f(u) \frac{\Var{p(\lambda)}{\lambda}}{\Ex{p(\lambda)}{\lambda}} \,.
-    \label{eq:fano}
-\end{equation}
+%Table~\ref{tab:tail_mass} measures that freedom and locates it.
+%The order cannot be raised without limit: at the gamma boundary the mixing law is a gamma of shape equal to the order, so a requested dispersion is reachable only below $\alpha = \Ex{}{\lambda}^{2}/\Var{}{\lambda}$, which is exactly the shape of the moment-matched negative binomial, and every order below that is a predictive no gamma can produce.
+%Moving down the range multiplies the mass beyond $y = 100$ by up to $392$ and divides the mass at zero by up to $4$ while the first two moments do not move, whereas at $y = 30$, three and a half standard deviations out, the mass changes by less than a fifth.
+%The freedom is therefore in the far tail and at zero, not where a held-out predictive score weighs most, which is worth recalling when Section~\ref{sec:experiments_bulk} finds the choice of mixing law worth little.
 
-Two properties of \eqref{eq:fano} matter for what follows.
-
-The first is that the departure from equidispersion is a function of the input.
-A Poisson process has $F = 1$ everywhere, whereas here the second term grows linearly in the exposure, so how overdispersed the observations are is itself something the sensor decides.
-Long dwells do not merely return larger counts, they return relatively more variable ones.
-
-The second concerns what the third parameter of \eqref{eq:gig} is for.
-A negative binomial already has a free mean and a free variance, so overdispersion on its own is no reason to leave the conjugate Poisson pair, and we do not claim otherwise.
-What \eqref{eq:gig} adds is a third parameter which, with the predictive mean and variance both held fixed, remains free to move mass between the centre of the distribution and its tail.
-That is the regime in which the count-modelling literature reaches for the Sichel law: observations that are at once overdispersed, heavily skewed and inflated at zero, where a two-parameter law cannot match the tail and the mode together.
-\claude{Quantified but not yet in an experiment folder: at matched predictive mean and variance the Sichel tail mass beyond $y=50$ differs from the moment-matched negative binomial by factors from 216 down to 0.7 across $\omega$, and the mass at zero by up to 1.6.}
-% TODO: cite. Sweep done 2026-08-08, full record in notes/sichel-literature-2026-08.md.
-% Add these to Zotero first; references.bib is not edited by hand.
-%   Sichel (1975), On a Distribution Law for Word Frequencies, JASA 70(351a), 542-547.
-%   Stein, Zucchini & Juritz (1987), Parameter Estimation for the Sichel Distribution and
-%     Its Multivariate Extension, JASA 82(399), 938-944.
-%   Rigby, Stasinopoulos & Akantziliotou (2008), A framework for modelling overdispersed
-%     count data, including the Poisson-shifted generalized inverse Gaussian distribution,
-%     CSDA 53(2), 381-393.
-%   Willmot (1987), The Poisson-inverse Gaussian distribution as an alternative to the
-%     negative binomial, Scand. Actuarial J. 1987(3-4).
-%   Low, Ong et al. (2017), Generalized Sichel Distribution and Associated Inference,
-%     JSTA 16(3).
-
-\section{INFERENCE}
+\section{Inference}
 \label{sec:inference}
 
-A sensor needs two things: what a count tells it about the rate, and what it should expect the next count to be before committing to an input.
-Assumption~\ref{as:exposure} makes both available in closed form, by the conjugacy of the generalised inverse Gaussian with a Poisson likelihood \citep{diaconis1979conjugate}.
-Neither is available in the arrangement in which it is most compactly written, which Remark~\ref{rem:conditioning} takes up.
+A sequential design needs to know what a count tells it about the rate, and what to expect of the next count before committing to an action.
+Conjugacy of the generalised inverse Gaussian with a Poisson likelihood makes both exact \citep{diaconis1979conjugate}, though neither survives evaluation in the arrangement in which it is most compactly written, which Remark~\ref{rem:conditioning} takes up.
 
-\subsection{Parameter Updating}
+\subsection{Updating parameters}
 \label{sec:inference_update}
 
-\begin{proposition}[Conjugate update]
-    \label{prop:update}
-    Under \eqref{eq:likelihood} and \eqref{eq:gig}, a count $y$ observed at input $u$ yields
-    %
-    \begin{equation}
-        p(\lambda \given y, u) = \Gig\big(\lambda \given \alpha + y, \, a, \, b + 2 f(u) \big) \,.
-        \label{eq:posterior}
-    \end{equation}
-\end{proposition}
-
-The derivation is one line.
-Multiplying \eqref{eq:likelihood} by \eqref{eq:gig} and dropping every factor free of $\lambda$ leaves
-%
+Under \eqref{eq:likelihood} and \eqref{eq:gig}, a count $y$ observed at action $u$ yields
 \begin{equation}
-    \lambda^{\alpha + y - 1} \exp\big( -(a/\lambda + (b + 2 f(u)) \lambda)/2 \big) \,,
-    \label{eq:posterior_kernel}
+    p(\lambda \given y, u) = \Gig\big(\lambda \given \alpha + y, \, a, \, b + 2 f(u) \big) \,. \label{eq:posterior}
 \end{equation}
-%
-which is the kernel of \eqref{eq:gig} at the stated parameters.
+Multiplying \eqref{eq:likelihood} by \eqref{eq:gig} and dropping every factor free of $\lambda$ leaves the kernel of \eqref{eq:gig} at the stated parameters.
+The count enters only through the order and the action only through the second scale parameter, additively, so an exposure delivered in one measurement updates the belief exactly as the same exposure split across several.
+The first scale parameter $a$ is never revised, because a Poisson likelihood carries information only through $\lambda^{y} e^{-f(u) \lambda}$ and neither factor has the $1/\lambda$ form that $a$ multiplies, so whatever weight the prior places on very small rates survives counting untouched. Repeating the update for $n$ time steps gives an update of $\nu + \sum_{i=1}^{n} y_i$ and $b + \sum_{i=1}^{n} f(u_i)$, which is free of order.
 
-The three parameters play distinct roles under \eqref{eq:posterior}.
-The count is absorbed by the order, which is the only place the data enter.
-The input is absorbed by the second scale parameter, and it enters additively, so the update is the same whether an exposure is delivered in one measurement or split across several.
-A sensor cannot manufacture information by fragmenting its budget.
+A belief is therefore two numbers per context whatever the horizon, both sums, so the posterior does not depend on the order of measurement.
+The second is chosen by the experimenter, which raises a question a fixed design need not answer.
 
-The first scale parameter $a$ is not revised at all, which is worth a sentence because it governs \eqref{eq:gig} near the origin.
-A Poisson likelihood carries information about the rate only through $\lambda^{y} e^{-f(u) \lambda}$, and neither factor has the $1/\lambda$ form that $a$ multiplies.
-Whatever weight the prior places on very small rates is therefore never revised by counting, which is a modelling commitment rather than a defect.
-
-\begin{corollary}[Two sufficient statistics]
-    \label{cor:sufficient}
-    After a history $\mathcal{D}_t = \{(y_i, u_i)\}_{i = 1}^{t}$ at one context,
-    %
-    \begin{equation}
-        p(\lambda \given \mathcal{D}_t) = \Gig\Big(\lambda \given \alpha + \textstyle\sum_{i} y_i, \, a, \, b + 2 \sum_{i} f(u_i) \Big) \,.
-        \label{eq:posterior_history}
-    \end{equation}
-\end{corollary}
-
-Two consequences matter for a sensor that has to plan.
-The history enters only through an accumulated count and an accumulated exposure, so a belief is two numbers per context whatever the horizon, and the state a planner carries does not grow with the number of measurements taken.
-Both statistics are sums, so the posterior does not depend on the order in which those measurements were made.
-
-The second of those statistics is chosen by the sensor, which raises a question a passive model does not have to answer: whether a policy that decides its own exposures still learns the rate.
-Write $F_t = \sum_{i \leq t} f(u_i)$ for the exposure a context has accumulated by step $t$, and let the inputs be adapted, so that $u_i$ may depend on everything observed before it.
+%Write $F_t = \sum_{i \leq t} f(u_i)$, with the actions adapted, so $u_i$ may depend on everything observed before it.
+The Fisher information up to time $t$ is:
+\begin{equation}
+	F_t = \mathbb{E} \big[ \frac{\partial}{\partial \lambda} \ln p(y \given u, \lambda_k) \given \lambda \big] = \sum{i < t} \frac{f(u_i)}{\lambda} \, .
+\end{equation}
 
 \begin{proposition}[Posterior consistency]
     \label{prop:consistency}
     Fix a context with true rate $\lambda^{*} > 0$ and a prior \eqref{eq:gig} with $a, b > 0$ and $\alpha \in \mathbb{R}$.
-    If the policy is such that $F_t \to \infty$ almost surely, then
+    Since $F_t$ is non-decreasing it has a limit $F_{\infty} \in (0, \infty]$, and the two cases partition the sample space.
+    On the event $\{F_{\infty} = \infty\}$,
     %
     \begin{equation}
         \Ex{p(\lambda \given \mathcal{D}_t)}{(\lambda - \lambda^{*})^{2}} \longrightarrow 0
         \label{eq:consistency}
     \end{equation}
     %
-    almost surely, so the posterior concentrates at $\lambda^{*}$, and its variance is $O(1/F_t)$.
-    If instead $F_t \to F_{\infty} < \infty$, the posterior converges almost surely to a non-degenerate law and consistency fails.
+    almost surely, so the posterior concentrates at $\lambda^{*}$.
+    Its variance is $O(1/F_t)$, and more precisely
+    %
+    \begin{equation}
+        F_t \, \Var{p(\lambda \given \mathcal{D}_t)}{\lambda} \longrightarrow \lambda^{*}
+        \label{eq:consistency_rate}
+    \end{equation}
+    %
+    almost surely, which is the inverse Fisher information of a Poisson observed at total exposure $F_t$.
+    On the event $\{F_{\infty} < \infty\}$ the posterior converges almost surely to a non-degenerate law and consistency fails.
 \end{proposition}
 
 The proof is in Appendix~\ref{appx:consistency}.
-Three features of it are worth stating here.
+Its condition falls on accumulated exposure rather than on the number of measurements, so it restricts the design and not the sample size: exposures decaying fast enough to be summable stop learning at a finite spread however many follow.
+This is persistence of excitation in the sense familiar from input design, the Fisher information accumulated being $F_t/\lambda^{*}$ by \eqref{eq:consistency_rate}.
+The unrevised $a$ does not obstruct concentration, entering the proof only through a bracket of width proportional to $a$ and inversely to the accumulated count, and the constant in \eqref{eq:consistency_rate} is the best a Poisson likelihood allows.
 
-The condition is on accumulated exposure and not on the number of measurements, which for an active sensor is a restriction on the policy rather than a formality.
-A policy whose exposures decay quickly enough to be summable stops learning at a finite spread, however many measurements it goes on to take, and the second half of Proposition~\ref{prop:consistency} says this is the only way to fail.
-Between the two regimes the rate is governed by $F_t$ throughout: exposures $f(u_i) \propto 1/i$ do diverge, but only logarithmically, and the posterior variance is still of order $1/\log t$.
-
-The parameter $a$, which Proposition~\ref{prop:update} leaves untouched by every observation, does not obstruct concentration.
-It enters the proof only through the width of a bracket around the posterior mean, a width proportional to $a$ and inversely proportional to the accumulated count, which therefore vanishes as counts arrive.
-An unrevised parameter is not a floor on the posterior spread, because the mass it governs sits near the origin and the posterior moves away from there.
-
-The rate is the one a Poisson likelihood permits and no better.
-The elementary bound of Appendix~\ref{appx:consistency} gives the order $1/F_t$; sharpening it identifies the constant as $\lambda^{*}$, so the posterior variance approaches $\lambda^{*}/F_t$, the inverse Fisher information of a Poisson observed at total exposure $F_t$.
-The three parameters that buy the tail behaviour of Section~\ref{sec:model_dispersion} are therefore free asymptotically: they cost nothing in the rate at which the rate itself is learned.
-
-\subsection{Posterior Prediction}
+\subsection{Posterior predictive distribution}
 \label{sec:inference_predictive}
 
-Because \eqref{eq:posterior} returns the family to itself, we write $(\alpha, a, b)$ for the parameters of the current belief, prior and posterior alike, and drop the history from the notation.
+Because \eqref{eq:posterior} returns the family to itself, $(\alpha, a, b)$ denotes the current belief, prior and posterior alike, and the history is dropped from the notation.
 
 \begin{proposition}[Posterior predictive]
     \label{prop:predictive}
-    Under the belief $\Gig(\lambda \given \alpha, a, b)$, the count returned by input $u$ has mass function
+    Under the belief $\Gig(\lambda \given \alpha, a, b)$, the count returned by action $u$ has mass function
     %
     \begin{equation}
         p(y \given u, \mathcal{D}) = \frac{(f(u) \eta_u)^{y}}{y!} \Big( \frac{\eta_u}{\eta} \Big)^{\alpha} \frac{K_{\alpha + y}(\omega_u)}{K_{\alpha}(\omega)} \,,
@@ -341,39 +294,22 @@ Because \eqref{eq:posterior} returns the family to itself, we write $(\alpha, a,
     where $\eta_u = \sqrt{a / (b + 2 f(u))}$ and $\omega_u = \sqrt{a (b + 2 f(u))}$ are the scale and concentration of the updated belief in the coordinates of \eqref{eq:gig_mean}.
 \end{proposition}
 
-Equation~\eqref{eq:sichel} is the Sichel law $\Sic$, introduced by \citet{sichel1975distribution} as a model for word frequencies and studied since as the Poisson mixture of a generalised inverse Gaussian rate \citep{stein1987parameter}.
-It follows from Proposition~\ref{prop:update} without further integration: the marginal of a count is the ratio of the normalising constant of the posterior to that of the prior, times the factor of the Poisson mass that does not involve the rate.
-Its mean and variance are \eqref{eq:predictive_mean} and \eqref{eq:predictive_variance} evaluated at the current belief.
+Equation~\eqref{eq:sichel} is the Sichel law $\Sic$ \citep{sichel1975distribution,stein1987parameter} and follows from Proposition~\ref{prop:update} without further integration, the marginal being the ratio of the two normalising constants times the rate-free factor of the Poisson mass.
+Every dependence on the action is carried by $f(u)$ through $(\eta_u, \omega_u)$, so a grid of candidates is scored against a belief computed once; the support is unbounded, so a functional that is not a moment, the entropy in particular, is a truncated sum over it.
 
-Every dependence of \eqref{eq:sichel} on the input is carried by the scalar $f(u)$, through the pair $(\eta_u, \omega_u)$.
-Scoring a grid of candidate inputs therefore costs one evaluation per candidate against a belief that is computed once, and nothing has to be re-solved as the candidate changes.
-
-The support of \eqref{eq:sichel} is unbounded, so a functional of the predictive that is not a moment, the entropy in particular, has no closed form and is computed as a sum over the support truncated at a fixed tail tolerance.
-
-\begin{remark}[A closed form is not an evaluation recipe]
+\begin{remark}[An exact form is not an evaluation recipe]
     \label{rem:conditioning}
     Equation~\eqref{eq:sichel} must not be evaluated as written.
-    The Bessel function $K_{\alpha + y}$ overflows double precision at moderate order, and by Corollary~\ref{cor:sufficient} the order a belief carries is $\alpha + \sum_i y_i$, which grows without bound as counts accumulate.
-    In the survey of Section~\ref{sec:experiments_verification} a direct call overflows after four measurements.
-    Every quantity is therefore accumulated in logarithms, and the run of orders that the support sum requires is obtained by one of two routes, neither of which is uniformly better.
-    The recurrence
-    %
-    \begin{equation}
-        K_{\nu + 1}(z) = K_{\nu - 1}(z) + (2 \nu / z) K_{\nu}(z)
-        \label{eq:bessel_recurrence}
-    \end{equation}
-    %
-    adds two positive quantities, so no cancellation occurs at any order, and over the first few dozen orders it is exact to the last digit.
-    Its rounding nevertheless compounds along the run: against $30$-digit references it is out by $3 \times 10^{-12}$ after $10^{3}$ orders and by $3 \times 10^{-7}$ after $2 \times 10^{5}$, where the uniform asymptotic expansion in the order is still exact, being a fixed-cost evaluation at each order rather than an accumulation.
-    Short runs take the recurrence and long runs the expansion.
-    Which route is needed is itself a modelling matter, since the length of the support sum is set by the weight of the predictive tail, and it is the heavy-tailed regime of Section~\ref{sec:model_dispersion} that makes the run long.
-    Analytic tractability and numerical reliability are different properties, and only the first is settled by Proposition~\ref{prop:predictive}.
+    $K_{\alpha + y}$ overflows double precision at moderate order, and by Corollary~\ref{cor:sufficient} the order a belief carries is $\alpha + \sum_i y_i$, which grows without bound; in Section~\ref{sec:experiments_verification} a direct call overflows after four measurements.
+    Every quantity is therefore accumulated in logarithms, and the run of orders a support sum needs comes by one of two routes.
+    The recurrence $K_{\nu + 1}(z) = K_{\nu - 1}(z) + (2 \nu / z) K_{\nu}(z)$ adds two positive quantities, so nothing cancels, but its rounding compounds, reaching $3 \times 10^{-7}$ after $2 \times 10^{5}$ orders where the uniform asymptotic expansion is still exact.
+    Short runs take the recurrence and long runs the expansion, and which is needed is set by the weight of the predictive tail.
 \end{remark}
 
-\subsection{Scoring a Candidate Input}
+\subsection{Information gain per action}
 \label{sec:inference_acquisition}
 
-The sensor scores a candidate by the information the count it returns is expected to carry about the rate \citep{lindley1956measure,houlsby2011bald}, that is by the mutual information between $\lambda$ and $y$ under the current belief,
+A candidate design is scored by the mutual information between $\lambda$ and $y$ under the current belief \citep{lindley1956measure,houlsby2011bald},
 %
 \begin{equation}
     \begin{split}
@@ -383,294 +319,236 @@ The sensor scores a candidate by the information the count it returns is expecte
     \label{eq:eig}
 \end{equation}
 %
-where the second line is the standard rearrangement of the expected Kullback-Leibler divergence into a predictive entropy less an expected conditional entropy,
+the second line being the usual rearrangement into a predictive entropy less an expected conditional one,
 %
 \begin{equation}
     A(u) = \Ex{p(\lambda \given \mathcal{D})}{ H\big[ \mathcal{P}\big(y \given f(u) \lambda \big) \big] } \,.
     \label{eq:aleatoric}
 \end{equation}
 
-\begin{proposition}[Two deterministic quadratures]
-    \label{prop:eig}
-    Under \eqref{eq:likelihood} and \eqref{eq:gig}, both terms of \eqref{eq:eig} are integrals against known densities and neither requires a sample.
-    The first is a sum of \eqref{eq:sichel} over the support of the predictive; the second is a one-dimensional integral of the Poisson entropy against the belief \eqref{eq:gig}.
-\end{proposition}
+Under \eqref{eq:likelihood} and \eqref{eq:gig} both terms are integrals against known densities and neither needs a sample: the first is a sum of \eqref{eq:sichel} over the support of the predictive, the second a one-dimensional integral of the Poisson entropy against the belief.
+Neither is closed form, the support being unbounded and the Poisson entropy having no elementary expression, but both are \emph{deterministic}, so \eqref{eq:eig} carries no Monte-Carlo error, no sample size to tune and no nesting bias, which is what an estimator outside a conjugate family must accept \citep{rainforth2018nesting,rainforth2024modern}.
+Both are cheap because Proposition~\ref{prop:predictive} puts every dependence on the action in $f(u)$ and \eqref{eq:aleatoric} integrates over one positive variable.
+The support sum is sized from \eqref{eq:predictive_mean} and \eqref{eq:predictive_variance} and widened until the tail mass outside meets a tolerance of $10^{-9}$, a normal-tail estimate not being conservative here; the second term is a $64$-node Gauss-Legendre rule in $\log \lambda$.
+Both accumulate in logarithms, for the reason Remark~\ref{rem:conditioning} gives.
 
-Neither term is a closed form.
-The support of \eqref{eq:sichel} is unbounded, so $H[p(y \given u, \mathcal{D})]$ is a sum truncated at a fixed tail tolerance, and the Poisson entropy inside \eqref{eq:aleatoric} has no elementary expression, so $A(u)$ is a quadrature.
-What Proposition~\ref{prop:eig} does buy is that both are \emph{deterministic}.
-The value of \eqref{eq:eig} carries no Monte-Carlo error, has no sample size to tune, and in particular no nesting bias, which is what an estimator of the same quantity outside a conjugate family has to accept \citep{rainforth2018nesting,rainforth2024modern}.
-We report the cost of that difference in Section~\ref{sec:experiments_bulk}.
+The decomposition in \eqref{eq:eig} separates the criteria compared in Section~\ref{sec:experiments}: EPIG \citep{smith2023prediction}, local D-optimality \citep{chaloner1995bayesian}, Neyman allocation \citep{neyman1992two}, uncertainty sampling in a total and an epistemic form \citep{griffiths2019heteroscedastic}, Thompson sampling, maximum entropy sampling \citep{sebastiani2000maximum}, and the belief-free systematic and random designs.
+Maximum entropy sampling is \eqref{eq:eig} with $A(u)$ dropped, and a Poisson entropy grows with its mean, roughly as $\tfrac{1}{2}\log(2\pi e f(u) \lambda)$, so dropping $A(u)$ rewards an action for the noise it collects instead of the uncertainty it removes.
 
-Two things make the evaluation cheap enough to put inside a loop over candidates.
-The first is Proposition~\ref{prop:predictive}: every dependence of both terms on the input passes through the scalar $f(u)$, so the belief-level quantities are computed once and a grid of candidates costs one pass apiece with nothing re-solved.
-The second is that \eqref{eq:aleatoric} is an integral over a single positive variable, which is the whole of the parameter addressed by the input.
-In our implementation the support sum of the first term is truncated at a tail mass of $10^{-13}$, sized from the predictive moments of \eqref{eq:predictive_mean} and \eqref{eq:predictive_variance} and widened until the tolerance is met, since a normal-tail estimate is not conservative for a heavy-tailed law; the second is a $64$-node Gauss-Legendre rule in $\log \lambda$, over the bracket on which the log-density of \eqref{eq:gig} has fallen $75$ nats from its mode.
-Both are accumulated in logarithms, for the reason Remark~\ref{rem:conditioning} gives.
+\begin{remark}[What a two-moment surrogate can and cannot see]
+    \label{rem:dopt}
+    Local D-optimality scores an action by $\log(1 + f(u) \Var{}{\lambda} / \Ex{}{\lambda})$, the log of the Fano factor \eqref{eq:fano}, so it reads the belief through one scalar.
+    Carrying that approximation into both terms of \eqref{eq:eig} gives
+    %
+    \begin{equation}
+        G(u) = \tfrac{1}{2} \log\big( 1 + f(u) \Var{}{\lambda} / \Ex{}{\lambda} \big) + c + o(1)
+        \label{eq:dopt_limit}
+    \end{equation}
+    %
+    as $f(u) \Ex{}{\lambda} \to \infty$, with $c = \tfrac{1}{2}( \log \Ex{}{\lambda} - \Ex{}{\log \lambda} ) - \Delta$ and $\Delta$ the entropy deficit of the predictive against a Gaussian of its variance.
+    The first term is the D-optimality score exactly and $c$ depends on the belief but not the action, so the two are an affine transform of one another along the exposure axis: contexts whose priors share a shape share $c$ and are ranked identically by both, whatever their means and variances.
+    Numerically $\Delta$ varies little across shapes, so $c$ moves almost entirely through the log-mean-minus-mean-log gap, a dispersion on the log scale the Fano factor cannot see.
+\end{remark}
 
-The decomposition in \eqref{eq:eig} is also what separates the criteria compared in Section~\ref{sec:experiments}.
-A criterion that scores an input by the predictive entropy alone, as maximum entropy sampling does \citep{sebastiani2000maximum}, is \eqref{eq:eig} with $A(u)$ dropped.
-By \eqref{eq:fano} the aleatoric term grows with the mean of the count, so dropping it rewards an input for the noise it collects rather than for the uncertainty it removes, and Section~\ref{sec:experiments_bulk} shows what that costs.
+\subsection{The Policy}
+\label{sec:inference_policy}
 
-\section{EXPERIMENTS}
+The criterion \eqref{eq:eig} ranks actions but does not say what to do, because actions differ in what they cost: a budget spent in gravel or telescope time is not one counted in measurements, and criteria compared at equal numbers of measurements would favour whichever asks for the largest sample.
+We therefore score an action by the information expected per unit of budget consumed, and act greedily,
+%
+\begin{equation}
+    u_{t + 1} \in \operatorname*{arg\,max}_{u \in \mathcal{U}} \; \frac{G(u)}{c(u)} \,,
+    \label{eq:policy}
+\end{equation}
+%
+where $c(u) > 0$ is what the action costs.
+We evaluate \eqref{eq:policy} over the grid of contexts and exposures, take the winner, update that context's belief by Proposition~\ref{prop:update} and repeat; the same normalisation is applied to every criterion in Section~\ref{sec:experiments}, ours included.
+Because the belief factorises an observation leaves the other $K - 1$ contexts untouched, so a step costs one update and $|\mathcal{V}|$ scores against the $K |\mathcal{V}|$ a naive implementation would pay.
+The rule is greedy over one step, which nothing above requires; we take it because every criterion in Section~\ref{sec:experiments} is greedy in the same way.
+
+\section{Experiments}
 \label{sec:experiments}
 
 \subsection{Verification on GIG-Poisson data}
 \label{sec:experiments_verification}
 
-\begin{figure*}[t]
-    \centering
-    \includegraphics[width=\linewidth]{experiments/experiment-gigpoisson/figures/prediction}
-    \caption{Prediction error against sample size on data the model specifies exactly, for four regimes of the generating parameters. Shaded bands are two standard errors over $400$ replicate rates. (a) Divergence from the oracle predictive falls as $1/n$. (b) The error in the posterior mean rate falls as $1/\sqrt{n}$. (c) The posterior variance rescaled by $F_n / \Ex{}{\lambda^{*}}$ collapses onto the constant predicted by Proposition~\ref{prop:consistency}, so the regime sets the constant only through the first few observations.}
-    \label{fig:prediction}
-\end{figure*}
+With rates drawn from \eqref{eq:gig} and counts from \eqref{eq:likelihood}, correct specification is arranged and any discrepancy is the implementation's.
+Against $4 \times 10^{5}$ draws, \eqref{eq:sichel} carries a support mass of one to $4 \times 10^{-13}$, the update \eqref{eq:posterior} agrees with numerical Bayes to a total variation of $8 \times 10^{-13}$, and the log-ratio to the negative binomial falls as $\omega^{2}$.
+Remark~\ref{rem:conditioning} is not hypothetical: a direct call to $K_{\nu}$ overflows at the fourth measurement, the order having reached $465.5$, while in log space the Bessel quantities stay accurate to $1.3 \times 10^{-13}$ against $40$-digit references.
 
-\begin{table}[t]
-    \caption{Fitted log-log slopes over the upper half of the sample-size range, by regime. The generating parameters change the constant, not the exponent.}
-    \label{tab:prediction_slopes}
-    \centering
-    \begin{tabular}{lrrrr}
-        \toprule
-        regime & $\mathbb{V}/\mathbb{E}$ & KL & rate err. & $\mathbb{V}[\lambda \given \mathcal{D}_n]$ \\
-        \midrule
-        light & $0.8$ & $-0.971$ & $-0.492$ & $-0.987$ \\
-        moderate & $4.0$ & $-0.952$ & $-0.472$ & $-0.995$ \\
-        heavy & $40$ & $-0.959$ & $-0.498$ & $-0.997$ \\
-        sparse & $0.5$ & $-0.935$ & $-0.480$ & $-0.973$ \\
-        \midrule
-        theory & & $-1$ & $-1/2$ & $-1$ \\
-        \bottomrule
-    \end{tabular}
-\end{table}
-
-Correct specification is arranged rather than assumed: rates are drawn from the mixing law \eqref{eq:gig} the sensor uses as its prior, and counts from the likelihood \eqref{eq:likelihood} it uses to update.
-Any discrepancy is therefore attributable to the implementation.
-Against $4 \times 10^{5}$ draws of the two-stage process, the predictive \eqref{eq:sichel} carries a support mass of one to $4 \times 10^{-13}$ and moments agreeing with a sum over the support to $9 \times 10^{-11}$; the conjugate update \eqref{eq:posterior} agrees with numerical Bayes to a total variation of $8 \times 10^{-13}$; and the largest log-ratio to the negative binomial obtained as $\omega \to 0$ falls as $\omega^{2}$.
-Remark~\ref{rem:conditioning} is not hypothetical: evaluated in log space the Bessel quantities are accurate to $1.3 \times 10^{-13}$ against $40$-digit references, while a direct call to $K_{\nu}$ returns an infinity from order $97$, which a belief reaches after four measurements.
-
-Figure~\ref{fig:prediction} and Table~\ref{tab:prediction_slopes} report how quickly the predictive approaches the one an oracle would use who knew the rate, over four regimes of the generating parameters and $400$ replicate rates each.
-Prediction error falls as $n^{-1}$ and the rate error as $n^{-1/2}$ in every regime.
-Panel (c) is the sharper test because it checks a constant: rescaling the posterior variance by $F_n / \Ex{}{\lambda^{*}}$ collapses all four regimes onto the value predicted by Proposition~\ref{prop:consistency} to within $2$ per cent, despite prior variance-to-mean ratios spanning a factor of $50$.
-The generating parameters set the constant and not the exponent, and fifty times more prior dispersion costs roughly one extra observation.
-\claude{Verification, not comparison: the competing models are not run here. A misspecified negative-binomial arm on the same data would be the natural addition.}
+Over four regimes, prediction error falls as $n^{-1}$ and rate error as $n^{-1/2}$, and rescaling the posterior variance by $F_n / \Ex{}{\lambda^{*}}$ collapses all four onto the constant \eqref{eq:consistency_rate} predicts to within $2$ per cent, despite prior variance-to-mean ratios spanning a factor of $50$; a misspecified gamma-Poisson arm converges at the same rate, paying a constant at the start and within two per cent by the thirty-second observation (Figure~\ref{fig:prediction}, Table~\ref{tab:prediction_slopes}).
 
 \subsection{Allocating a Bulk-Sampling Programme}
 \label{sec:experiments_bulk}
 
-\begin{figure*}[!t]
-    \centering
-    \includegraphics[width=\linewidth]{experiments/experiment-bulk-sampling/figures/bulk}
-    \caption{Bulk sampling under a processing budget, 48 properties of 12 blocks each. Bands are one standard error. (a) Holding the model fixed and varying the acquisition. (b) Holding the acquisition fixed and varying the mixing law; note the axis, which spans a fifth of the range in (a). (c) Where the budget went, against what each block was worth: the systematic programme is flat by construction, the informed criteria tilt gently towards blocks with more to learn, and maximum entropy sampling abandons everything but the richest.}
-    \label{fig:bulk}
-\end{figure*}
-
 \begin{table}[t]
-    \caption{Bulk sampling at 12 blocks and 240 cubic metres, mean over 48 properties: held-out NLPD, grade RMSE, top-4 regret and milliseconds per decision. Superscripts are the paired $t$ against our agent, so negative favours ours and $|t| < 2$ is a tie. The upper block varies the acquisition with the model held fixed, the lower varies the mixing law with the acquisition held fixed. This is one point of the sweep in Figure~\ref{fig:scarcity}, and an abundant one.}
+    \caption{Bulk sampling at 12 blocks and 240 cubic metres, mean over 48 properties. Superscripts are the paired $t$ against our agent: negative favours ours, $|t| < 2$ is a tie, and a column is bolded only where its leader beats every other at $|t| \geq 2$, which none does here. The upper block varies the acquisition with the model fixed, the lower the mixing law with the acquisition fixed. One point of Figure~\ref{fig:scarcity}, and an abundant one.}
     \label{tab:bulk}
     \centering
     \footnotesize
     \setlength{\tabcolsep}{2pt}
-    \begin{tabular}{lcccr}
-        \toprule
-        agent & NLPD & RMSE & regret & ms \\
-        \midrule
-        \multicolumn{5}{l}{\emph{acquisition, under the GIG-Poisson model}} \\
-        EIG (ours) & $\mathbf{1.487}$ & $0.178$ & $0.016$ & $8.8$ \\
-        EPIG & $1.490^{-1.4}$ & $0.179^{-0.2}$ & $0.016^{-0.1}$ & $74$ \\
-        D-opt. & $1.488^{-0.4}$ & $0.187^{-2.0}$ & $0.018^{-0.4}$ & $0.5$ \\
-        Neyman & $1.502^{-2.9}$ & $\mathbf{0.172}^{+0.7}$ & $0.016^{+0.0}$ & $1.0$ \\
-        systematic & $1.500^{-3.3}$ & $0.221^{-5.4}$ & $\mathbf{0.015}^{+0.3}$ & $0.001$ \\
-        epistemic & $1.564^{-7.0}$ & $0.229^{-3.1}$ & $0.032^{-2.1}$ & $1.6$ \\
-        total var. & $1.576^{-6.2}$ & $0.261^{-2.4}$ & $0.038^{-2.4}$ & $1.6$ \\
-        random & $1.597^{-8.3}$ & $0.482^{-4.4}$ & $0.046^{-3.2}$ & $0.01$ \\
-        Thompson & $1.701^{-10.5}$ & $0.539^{-6.2}$ & $0.088^{-4.3}$ & $3.6$ \\
-        max-ent. & $1.789^{-12.6}$ & $0.698^{-5.5}$ & $0.118^{-5.3}$ & $7.9$ \\
-        \midrule
-        \multicolumn{5}{l}{\emph{mixing law, under the EIG acquisition}} \\
-        gamma-Poisson & $1.499^{-3.3}$ & $0.199^{-3.4}$ & $0.016^{-0.0}$ & $0.8$ \\
-        lognormal-Pois. & $1.492^{-2.0}$ & $0.182^{-1.7}$ & $0.017^{-0.2}$ & $21$ \\
-        \bottomrule
-    \end{tabular}
+    \input{experiments/tables/bulk}
 \end{table}
 
-The setting is the one the Sichel law was introduced for: diamonds occur in clusters, and it was the failure of the standard discrete laws to reproduce observed stone-count frequencies that motivated mixing a Poisson rate over a generalised inverse Gaussian \citep{sichel1975distribution,stein1987parameter}.
-That model is used to value a deposit once samples are in hand, not to decide which samples to take.
-A property is divided into $K$ blocks, block $k$ carries an unknown stone density $\lambda_k$, and an action is a pair $(k, v)$: which block to sample and how much gravel to process, from a schedule of $\{1, 2.5, 5, 10, 20, 40\}$ cubic metres.
-The exposure is $f(u) = v r_k$ with $r_k$ the plant's known recovery factor, which is Assumption~\ref{as:exposure} exactly.
+This is the setting the Sichel law was introduced for: it was the failure of the standard discrete laws on stone counts in clustered diamond deposits that motivated the generalised inverse Gaussian \citep{sichel1975distribution,stein1987parameter}, to value a deposit once samples are in hand rather than to decide which to take.
+A property has $K$ blocks of unknown stone density $\lambda_k$, and an action $(k, v)$ names a block and a volume of gravel from $\{1, 2.5, 5, 10, 20, 40\}$ cubic metres, with exposure $f(u) = v r_k$ through the plant's known recovery factor, which is Assumption~\ref{as:exposure} exactly.
+The budget is gravel rather than samples, so every criterion is scored per cubic metre.
+Each block's stone field is realised once as a Poisson process in processed volume, so two policies that process the same gravel recover the same stones.
+We report a held-out predictive score, the grade error, and the grade forgone by committing to the four best-ranked blocks.
 
-Two features of the design carry the comparison.
-The budget is cubic metres of gravel rather than a number of samples, so every criterion is scored per cubic metre; counting in rounds would be won by whichever policy asks for the largest sample.
-And the gravel is shared exactly: each block's stone field is realised once as a Poisson process in processed volume, so two policies that process the same gravel recover the same stones.
-We report a held-out predictive score, the error in the estimated grade, and the grade forgone by committing to the four blocks a belief ranks highest.
+Table~\ref{tab:bulk} reports both comparisons at twelve blocks and $240$ cubic metres, and against every criterion that ignores the aleatoric term the result is decisive.
+Maximum entropy sampling is the worst agent in the study, behind random, touching $2.8$ of $12$ blocks and putting $239$ of $240$ cubic metres into the richest block of a representative property: scoring a sample by how unpredictable its outcome is sends the budget where it teaches least per unit of gravel, which is $A(u)$ going unsubtracted.
+Thompson sampling and both variance criteria fail the same way.
 
-Table~\ref{tab:bulk} reports both comparisons at twelve blocks and $240$ cubic metres.
-Against every criterion that ignores the aleatoric term the result is decisive: maximum entropy sampling is the worst agent in the study, behind random, and panel (c) explains why.
-Averaged over properties it touches $2.8$ of $12$ blocks, and on a representative property it puts $239$ of $240$ cubic metres into the single richest one.
-The entropy of a count grows with its mean, so scoring a sample by how unpredictable its outcome is sends the budget to the block a sample tells one least about per unit of gravel, which is the aleatoric term of \eqref{eq:fano} acting as Section~\ref{sec:model_dispersion} describes.
-Thompson sampling and both variance criteria fail the same way, spending on five or six blocks of twelve.
-
-Against the criteria that use the same posterior as carefully, the accuracy is a tie: EPIG \citep{smith2023prediction} and D-optimality are indistinguishable from our agent on the predictive score, and no agent separates on the coarse ranking, which saturates once every block is visited.
-On a model with one parameter per context, information about the rate and about the next count rank the candidates almost identically.
-What separates them is cost: our acquisition is a closed form at $8.8$ milliseconds per decision where EPIG matches it at $74$, because its outer expectation needs a posterior predictive entropy at every node.
-Holding the acquisition fixed instead, the third parameter is worth $0.012$ nats against the gamma boundary of its own family and $0.006$ against a lognormal.
+Against the criteria that use the same posterior as carefully the accuracy is a tie and what separates them is cost.
+EPIG \citep{smith2023prediction} and D-optimality are indistinguishable from ours, and none separates on the coarse ranking: with one parameter per context, information about the rate and about the next count rank candidates almost identically.
+Holding the acquisition fixed instead, the third parameter is worth $0.012$ nats against the gamma boundary of its own family and $0.006$ against a lognormal, both measured where our model is correct by construction, so they report what misspecification costs rather than what the parameter is worth.
 Appendix~\ref{appx:grid} shows the two effects do not interact.
 
 \begin{figure}[t]
     \centering
-    \includegraphics[width=\linewidth]{experiments/experiment-bulk-sampling/figures/scarcity}
-    \caption{Predictive score relative to our agent as the budget per block is varied at fixed total budget, 24 properties per point. An agent on the zero line is indistinguishable from ours. The systematic programme sits on it while the budget is ample and leaves it once the budget cannot cover the blocks.}
+    \includegraphics[width=\linewidth]{experiments/bulk-sampling/figures/scarcity}
+    \caption{Predictive score relative to ours as the budget per block varies at fixed total budget, 24 properties a point; an agent on the zero line is indistinguishable from ours. The systematic programme sits on it while the budget is ample and leaves it once the budget cannot cover the blocks.}
     \label{fig:scarcity}
 \end{figure}
 
-Those numbers are one point on a curve.
-Twelve blocks sharing $240$ cubic metres is enough that every block ends up well sampled whatever the schedule does, which is a poor place to compare schedules.
-Figure~\ref{fig:scarcity} holds the budget fixed and varies the number of blocks it must cover.
-The systematic programme is indistinguishable from our agent while the budget is ample, at $-0.002$ nats with forty cubic metres per block, and falls away once it is not, reaching $-0.169$ at $-8$ standard errors with five and $-0.164$ at $-14$ with two and a half.
-The transition is sharp and sits between ten and five cubic metres per block, where a block stops being measurable in the share of the budget it can expect.
-The choice of mixing law behaves the same way but an order of magnitude smaller, the gamma falling from $-0.004$ nats to between $-0.015$ and $-0.021$.
-An adaptive schedule therefore earns its keep exactly when the budget cannot cover the contexts, and Section~\ref{sec:experiments_photon} is run at the scarce end for that reason.
-\claude{This is a simulator whose structure is taken from the domain, not a field trial on a real deposit. Said plainly in the discussion; do not let the framing drift.}
+Twelve blocks sharing $240$ cubic metres leaves every block well sampled whatever the schedule does, so Figure~\ref{fig:scarcity} holds the budget fixed and varies the number of blocks it must cover.
+The systematic programme is indistinguishable from ours while the budget is ample, at $-0.002$ nats with forty cubic metres per block, and falls to $-0.169$ at $-8$ standard errors with five.
+The transition is sharp and sits between ten and five cubic metres per block; the choice of mixing law behaves the same way an order of magnitude smaller, the gamma falling from $-0.004$ nats to between $-0.015$ and $-0.021$.
+An adaptive schedule is suited when the budget is scarce.
 
-\subsection{Scheduling a Gamma-Ray Observing Campaign}
+\subsection{Scheduling a Gamma-Ray Observation}
 \label{sec:experiments_photon}
 
-\begin{figure*}[!t]
-    \centering
-    \includegraphics[width=\linewidth]{experiments/experiment-photon-counting/figures/photon}
-    \caption{Scheduling telescope time across 48 gamma-ray targets on a budget of 120 megaseconds, 24 programmes. (a) The measured flux field of the Fermi-LAT catalogue against the maximum-likelihood fit of each mixing law. (b) Held-out predictive score against telescope time spent; bands are one standard error. (c) Time given to a target against how bright it turned out to be: maximum entropy sampling spends it all on the brightest, the informed criteria do not.}
-    \label{fig:photon}
-\end{figure*}
-
 \begin{table}[t]
-    \caption{Gamma-ray scheduling at the full budget, mean over 24 programmes. Superscripts are the paired $t$ against our agent; negative favours ours and $|t| < 2$ is a tie. The upper block varies the acquisition, the lower the mixing law.}
+    \caption{Gamma-ray scheduling at the full budget, mean over 24 programmes; conventions as in Table~\ref{tab:bulk}. The upper block varies the acquisition, the lower the mixing law. The two variance criteria return identical schedules here, for the reason given in the text.}
     \label{tab:photon}
     \centering
     \footnotesize
     \setlength{\tabcolsep}{2pt}
-    \begin{tabular}{lcccr}
-        \toprule
-        agent & NLPD & dex & regret & ms \\
-        \midrule
-        \multicolumn{5}{l}{\emph{acquisition, under the GIG-Poisson model}} \\
-        EIG (ours) & $3.373$ & $0.131$ & $0.0066$ & $16$ \\
-        EPIG & $3.373^{+0.5}$ & $0.131^{+0.6}$ & $0.0066^{-0.4}$ & $127$ \\
-        D-opt. & $3.373^{+0.2}$ & $0.130^{+0.5}$ & $0.0066^{+0.0}$ & $0.6$ \\
-        Neyman & $3.380^{-0.6}$ & $0.139^{-3.8}$ & $0.0062^{+0.5}$ & $4.0$ \\
-        systematic & $3.784^{-18.7}$ & $0.307^{-25.9}$ & $0.205^{-10.6}$ & $0.001$ \\
-        total var. & $3.780^{-20.3}$ & $0.241^{-21.9}$ & $0.062^{-4.2}$ & $1.1$ \\
-        Thompson & $3.943^{-32.1}$ & $0.317^{-33.8}$ & $0.158^{-7.1}$ & $15$ \\
-        random & $4.006^{-23.2}$ & $0.344^{-29.0}$ & $0.270^{-8.2}$ & $0.01$ \\
-        max-ent. & $4.143^{-32.5}$ & $0.389^{-40.8}$ & $0.276^{-8.2}$ & $13$ \\
-        \midrule
-        \multicolumn{5}{l}{\emph{mixing law, under the EIG acquisition}} \\
-        gamma-Poisson & $3.422^{-7.4}$ & $0.145^{-4.7}$ & $0.0098^{-2.3}$ & $1.1$ \\
-        lognormal-Pois. & $3.381^{-1.4}$ & $0.131^{-0.0}$ & $0.0063^{+0.3}$ & $146$ \\
-        \bottomrule
-    \end{tabular}
+    \input{experiments/tables/photon}
 \end{table}
 
-Every rate in the previous section is drawn from the law of Section~\ref{sec:model_prior}, so a model assuming that law is correct by construction.
-Here the rates are the photon fluxes of $5065$ sources in the Fermi Large Area Telescope fourth source catalogue \citep{abdollahi2020fermi}, and the instrument that measured them is a photon counter, so the counting model of Section~\ref{sec:model} is the measurement process rather than an analogy.
-A pointed observation looks at one target at a time and the expected number of photons is the flux times the effective area times the time on target, so $f(u) = A_{\text{eff}} t$ and the budget is spent in megaseconds.
-Priors are conditioned on the catalogue's source class, which an observer knows before pointing and which matters: pulsars have a median flux twelve times that of blazar candidates and a variance-to-mean ratio twelve hundred times larger.
-The catalogue is split within each class, so priors are fitted to one half and sources drawn from the other.
+Every rate in the previous section is drawn from the law of Section~\ref{sec:model_prior}, so a model assuming it is correct by construction.
+Here the rates are measured photon fluxes from the Fermi Large Area Telescope fourth source catalogue \citep{abdollahi2020fermi}, so Section~\ref{sec:model} is the measurement process rather than an analogy: the expected count is the flux times the effective area times the time on target, so $f(u) = A_{\text{eff}} t$ and the budget is spent in megaseconds.
+Priors are conditioned on source class, which an observer knows before pointing and which matters, pulsars having a median flux twelve times that of blazar candidates and a variance-to-mean ratio twelve hundred times larger.
+The catalogue is split within each class, priors fitted to one half and sources drawn from the other.
 
 Forty-eight targets share $120$ megaseconds, so most cannot be observed at all.
-Under the same acquisition, the gamma mixing law is $0.049$ nats behind ours at $-7.4$ standard errors, $0.014$ dex behind on the flux estimate, and behind on the scheduling decision as well, which is the first setting here where the choice of model reaches the decision.
-The lognormal ties us to within a standard error at nine times the cost per decision, so what the third parameter does not buy against that alternative the conjugacy buys instead.
-The acquisition separates in the same regime: a systematic schedule is $0.41$ nats behind at $-18.7$ standard errors and maximum entropy sampling $0.77$ behind, while EPIG and D-optimality remain indistinguishable from our criterion, as they are in every setting we have run.
+Under the same acquisition the gamma mixing law is $0.049$ nats behind ours at $-7.4$ standard errors, $0.014$ dex behind on the flux estimate and behind on the scheduling decision as well, the first setting here where the choice of model reaches the decision.
+The lognormal ties us within a standard error at nine times the cost, so what the third parameter does not buy against that alternative the conjugacy buys instead.
+The acquisition separates in the same regime, a systematic schedule falling $0.41$ nats behind at $-18.7$ standard errors and maximum entropy sampling $0.77$, while EPIG and D-optimality remain indistinguishable from ours.
 
-\subsection{Which Mixing Law Do Real Rate Fields Need?}
+The two variance criteria return the same schedule on every programme, which they do not in Section~\ref{sec:experiments_bulk}: the effective area is large and the fluxes heavily overdispersed, so the epistemic part of the predictive variance outweighs the aleatoric by two to four orders of magnitude and the rankings coincide, a fact about this problem rather than about the criteria.
+
+\subsection{When Does the Exact Criterion Pay?}
+\label{sec:experiments_shape}
+
+\begin{table}[t]
+    \caption{Contexts of differing prior shape, low-count regime, budget $8$ or $0.67$ per context, mean over $80$ episodes; conventions as in Table~\ref{tab:bulk}. The fifth column is the share of budget given to the heavy-shape class, a mechanism rather than a score. Every agent carries the same belief, so the acquisition is all that varies. One point of Figure~\ref{fig:shape_scarcity}.}
+    \label{tab:shape_scarcity}
+    \centering
+    \footnotesize
+    \setlength{\tabcolsep}{2pt}
+    \input{experiments/tables/shape_scarcity}
+\end{table}
+
+\begin{figure*}[t]
+    \centering
+    \includegraphics[width=\linewidth]{experiments/synthetic/shape-scarcity/figures/shape_scarcity}
+    \caption{Twelve contexts in two classes differing in prior shape, $80$ episodes a point. (a) Rate error D-optimality incurs over ours, so above zero is our gain; bands are two standard errors of the paired difference. The gain is about four times larger at low counts than at high and is gone by roughly $1.3$ units of exposure per context. (b) The mechanism: D-optimality sends the whole budget to the heavy-shape class, whose dispersion is larger but mostly unresolvable, and ours none until the mild contexts are exhausted.}
+    \label{fig:shape_scarcity}
+\end{figure*}
+
+Remark~\ref{rem:dopt} says the two criteria must agree wherever contexts share a prior shape, which is how both studies above are arranged; this section varies it.
+
+Twelve contexts fall in two classes of six, sharing a prior mean and differing in the order of the mixing law, $-2$ against $-0.5$.
+The heavy class is given the \emph{larger} index of dispersion, $1.30$ against $1.00$, so local D-optimality strictly prefers it while \eqref{eq:eig} strictly prefers the mild class: confident and opposite preferences, neither ever breaking a tie, which a gate verifies before the sweep runs.
+That direction is the interesting one, because a large index of dispersion under a heavy-tailed mixing law is mostly unresolvable, coming from a small probability of a very large rate that no exposure recovers, and D-optimality reads that variance as something to be learned.
+Rates are drawn from each class's own law and every criterion carries the same belief, so the acquisition is all that varies.
+
+Figure~\ref{fig:shape_scarcity} sweeps the budget at a low and a high count level and Table~\ref{tab:shape_scarcity} reports one point of it.
+While the budget is scarce our criterion is ahead on the rate estimate, by $0.041$ dex at $-13.3$ standard errors at the scarcest point and $0.019$ at $-5.7$ with $0.67$ units of exposure per context, D-optimality putting the whole budget into the heavy class and ours none of it.
+Lowering the counts roughly quadruples the gain at fixed budget, from $-3.2$ standard errors to $-13.3$, which is where the approximation behind \eqref{eq:dopt_limit} is weakest.
+
+Three things qualify this.
+The separation is on the rate estimate, not the held-out predictive, where D-optimality stays within two standard errors of us everywhere: \eqref{eq:eig} scores information about the rate, and the rate is what it moves.
+EPIG matches us throughout, so what pays is the exact predictive rather than this functional, and both need the conjugacy of Section~\ref{sec:inference}.
+And past about $1.3$ units per context the sign turns, D-optimality leading by $4.4$ standard errors at $2.67$: our greedy rule reinvests where the score is still high and has touched $74$ per cent of contexts there against D-optimality's hundred, so the concentration that wins under scarcity becomes under-coverage once the budget could reach everything, which is what a policy not ensuring the condition of Proposition~\ref{prop:consistency} costs.
+
+\subsection{Which mixing law to use when?}
 \label{sec:experiments_fields}
 
 \begin{figure*}[!t]
     \centering
-    \includegraphics[width=\linewidth]{experiments/experiment-rate-fields/figures/rate_fields}
-    \caption{Three measured fields of rates against the maximum-likelihood fit of each candidate mixing law. The fitted order is printed on each panel: the gamma occupies the edge of the family at a positive order, so a field whose order is fitted negative is one the gamma cannot reach however its two parameters are set. On the third panel the fitted order is positive and the gamma and the generalised inverse Gaussian coincide.}
+    \includegraphics[width=\linewidth]{experiments/rate-fields/figures/rate_fields}
+    \caption{Three measured fields of rates against the maximum-likelihood fit of each mixing law. The gamma occupies the edge of the family at positive order, so a field fitted negative is one no gamma can reach however its two parameters are set; on the third the fitted order is positive and the two coincide.}
     \label{fig:rate_fields}
 \end{figure*}
 
 \begin{table}[t]
-    \caption{Three measured rate fields. $\Delta$AIC is against the best law for that field, so zero marks the winner. The last column is the advantage of the third parameter over the gamma per observation, which is the comparable figure across fields of different size.}
+    \caption{Three measured rate fields. $\Delta$AIC is against the best law for that field, so zero marks the winner; the order is the generalised inverse Gaussian's, the only law with a free one. The last column is the third parameter's advantage over the gamma per observation, which is what compares across fields of different size.}
     \label{tab:rate_fields}
     \centering
     \footnotesize
     \setlength{\tabcolsep}{3pt}
-    \begin{tabular}{llrrrr}
-        \toprule
-        field & law & $n$ & $\Delta$AIC & order & per obs. \\
-        \midrule
-        \multirow{3}{*}{Fermi-LAT} & gamma & & $1773$ & & \\
-        & lognormal & $4557$ & $555$ & & $0.39$ \\
-        & GIG & & $\mathbf{0}$ & $-1.43$ & \\
-        \midrule
-        \multirow{3}{*}{Safecast} & gamma & & $568$ & & \\
-        & lognormal & $1107$ & $136$ & & $0.51$ \\
-        & GIG & & $\mathbf{0}$ & $-2.07$ & \\
-        \midrule
-        \multirow{3}{*}{Newsgroups} & gamma & & $7$ & & \\
-        & lognormal & $22460$ & $1362$ & & $0.00$ \\
-        & GIG & & $\mathbf{0}$ & $+1.73$ & \\
-        \bottomrule
-    \end{tabular}
+    \input{experiments/tables/rate_fields}
 \end{table}
 
 The comparisons above either generate their rates from \eqref{eq:gig} or argue from a single field.
-This section asks three measured fields at once and allows them to disagree: the photon fluxes of Section~\ref{sec:experiments_photon}; the count rates of $1107$ five-hundred-metre cells around Fukushima Daiichi, recorded as counts per minute by the Geiger counters of the Safecast project \citep{brown2016safecast}; and, as a deliberate outsider, the relative rates of $1123$ terms across the twenty corpora of the 20 Newsgroups collection.
-Each mixing law is fitted by maximum likelihood with the location held at zero and scored by AIC, so the third parameter pays for itself.
-No acquisition, budget or policy enters.
+This section asks three measured fields at once and lets them disagree: the photon fluxes of Section~\ref{sec:experiments_photon}, the count rates of $1107$ five-hundred-metre cells around Fukushima Daiichi recorded by the Safecast project \citep{brown2016safecast}, and, as a deliberate outsider, 
+Each law is fitted by maximum likelihood with the location at zero and scored by AIC, so the third parameter pays for itself; no acquisition, budget or policy enters.
 
-On the two physical fields the third parameter is decisive, by $1773$ and $568$ points of AIC against the gamma; on the linguistic field it is worth $7$ points on $22460$ observations.
+On the two physical fields the third parameter is decisive, by $1773$ and $568$ points of AIC against the gamma; on the linguistic field it is worth $7$ points on $22460$ observations, or $0.0003$ each.
 The fitted order says why.
-A gamma is the boundary of the family at $\omega \to 0$ with a positive order, so a field whose order is fitted at $-1.43$ or $-2.07$ is one no gamma can reach however its two parameters are set, whereas one fitted at $+1.73$ sits inside the gamma's own range and the extra parameter has nothing left to do.
-The question therefore has an answer that can be checked from the rates alone, before any sensing is designed, at the cost of one maximum-likelihood fit.
-The ordering of the two-parameter laws is not stable across the three fields, so a practitioner who has settled on one of them has settled on the wrong one somewhere.
-\claude{Two citations still missing from \texttt{references.bib}: Abdollahi et al. (2020), \emph{Fermi LAT Fourth Source Catalog}, ApJS 247, 33; and Brown et al. (2016), \emph{Safecast}, J.\ Radiol.\ Prot.\ 36(2), S82.}
-\claude{Caveats were cut from this section on request as premature. They survive in each experiment's README: Fermi is flux-limited with estimated fluxes; Safecast is crowd-sourced from vehicles over years of decay, so a cell's rate is a mean over passes; and the Newsgroups field excludes terms absent from any group, which removes exactly the rare terms where burstiness is strongest. The last of these cuts against the result rather than for it, so it should return before the claim travels.}
+A gamma is the boundary of the family at $\omega \to 0$ with positive order, so a field fitted at $-1.43$ or $-2.07$ is one no gamma can reach however its two parameters are set, while one fitted at $+1.73$ merely sits inside the gamma's range, which is necessary for the gamma to suffice and not sufficient.
+The question can therefore be settled from the rates alone, at the cost of one fit.
+The ordering of the two-parameter laws is not stable: the lognormal beats the gamma on both physical fields and loses on the linguistic one.
 
-\section{DISCUSSION}
+Three features of the data qualify this.
+The Fermi fluxes come from a flux-limited catalogue, so the field is the detected population rather than the intrinsic one.
+A Safecast cell's rate is a mean over vehicle passes spread across years of decay and neighbouring cells are not independent, so the effective sample size is below $1107$.
+The Newsgroups field excludes terms absent from every group, removing the rare bursty terms where a heavy tail would show most, which works against the null result rather than for it.
+
+\section{Discussion}
 \label{sec:discussion}
 
-\paragraph{What the exposure assumption excludes.}
-Assumption~\ref{as:exposure} asks that the action scale the rate by a known factor.
-That covers a dwell time, an integration time, a processed volume and a known attenuation, and it is what keeps the family closed under observation.
-It excludes an additive term.
-A real gamma-ray observation counts source photons together with a known diffuse background, and a real survey meter counts contamination together with a natural background, so the rate is $f(u)\lambda + b$ rather than $f(u)\lambda$.
-The mixture is no longer conjugate and the predictive is no longer Sichel.
-This is the most concrete boundary of the framework we have found, and the obvious next question.
+Assumption~\ref{as:exposure} keeps the family closed under observation but excludes an additive term: a real gamma-ray observation counts source photons together with a known diffuse background, so the rate is $f(u)\lambda + b$, the mixture is no longer conjugate and the predictive no longer Sichel.
+That is the most concrete boundary of the framework we have found.
 
-\paragraph{What the acquisition is and is not worth.}
-Two criteria matched ours on accuracy in every setting we ran: the prediction-oriented EPIG \citep{smith2023prediction} and local D-optimality \citep{chaloner1995bayesian}.
-We take that at face value.
-On a model carrying one parameter per context, whose predictive depends on the belief only through that parameter, information about the rate and information about the next observation order the candidates almost identically, and the distinction that motivates a prediction-oriented acquisition does not arise.
-What separates the three is cost: our criterion is a closed form, D-optimality is a moment, and EPIG requires an expectation over the candidate's own predictive with a posterior predictive entropy at every node.
-The case for the work is therefore that a conjugate model makes a good acquisition cheap, not that it makes a better one.
+EPIG \citep{smith2023prediction} and local D-optimality \citep{chaloner1995bayesian} matched ours on accuracy in both allocation studies, at $0.52$, $8.9$ and $75$ milliseconds per decision.
+Remark~\ref{rem:dopt} says why the second ties, and it is not a fact about those problems: D-optimality is the leading term of our own criterion, so contexts whose priors share a shape are ranked identically by both, and both studies are arranged that way.
+Section~\ref{sec:experiments_shape} separates them where the theory says it should, though narrowly, and EPIG separates from us nowhere, which places the value in the exact predictive rather than in the choice of functional.
+Conjugacy buys an exact predictive, an acquisition free of Monte-Carlo error and a decision no two-moment surrogate reaches in one identified regime; it does not buy the cheapest rule.
 
-The criteria that did separate, and badly, are those that ignore the aleatoric term.
-Maximum entropy sampling \citep{sebastiani2000maximum} was the worst policy in both allocation studies, behind uniform random sampling.
-The reason is visible in \eqref{eq:fano}: the entropy of a count grows with its mean, so a criterion that scores an action by how unpredictable its outcome is spends the budget where the noise is largest rather than where the uncertainty is.
-That failure is a property of the criterion rather than of our family, since it reproduces under every mixing law we tried.
+Against every criterion that ignores the aleatoric term the margin is wide: maximum entropy sampling \citep{sebastiani2000maximum} was the worst policy in both studies, behind uniform random sampling, and the failure reproduces under every mixing law we tried, so it belongs to the criterion and not to our family.
 
-\paragraph{Scarcity is the operative variable.}
-The single most consequential thing we found is not about any criterion.
-When the budget is large enough that every context ends up well measured, no allocation rule can distinguish itself from visiting each in turn, and the prior differences that an adaptive rule would exploit are washed out by data.
-The transition is sharp.
-A study that reports one budget is reporting one point on that curve, and we would encourage the practice of sweeping it.
+Once the budget is large enough that every context ends up well measured, no rule distinguishes itself from visiting each in turn, and the transition is sharp, so a study reporting one budget reports one point on that curve.
+Past it ours is slightly behind D-optimality: Proposition~\ref{prop:consistency} needs accumulated exposure to diverge at every context and Section~\ref{sec:inference_policy} does not ensure it, the one place here where the theory and the policy come apart.
+A coverage floor would close it and we have not tested one.
 
-\paragraph{Limits of what we have shown.}
-The two allocation studies are simulators whose structure is taken from their domains, not field trials, and only the rate fields of Section~\ref{sec:experiments_fields} are measured.
-Contexts are treated as independent, which is what makes the belief factorise and the per-candidate cost a single evaluation; a spatial problem in which neighbouring cells inform each other would break that and is the extension we would attempt first.
-And the rate of a context is taken to be fixed and unknown, so the overdispersion the model carries is uncertainty about it.
-A process in which the rate is redrawn at every observation is a different model, and which of the two a given application needs is a question we have not settled.
+The two allocation studies are simulators whose structure is taken from their domains rather than field trials; only the rate fields of Section~\ref{sec:experiments_fields} are measured.
+Contexts are independent, so a spatial problem in which neighbouring cells inform each other would break the factorisation.
+The rate of a context is fixed and unknown, so a process in which it is redrawn at every observation is a different model.
 \claude{That last point is unresolved and load-bearing: it decides what the right baselines are. See the memory note \texttt{overdispersion-has-two-readings}.}
 
-\section{CONCLUSION}
+\section{Conclusion}
 \label{sec:conclusion}
 
-Counting instruments with a controllable exposure admit a conjugate model richer than the gamma-Poisson pair.
-Mixing a Poisson rate over a generalised inverse Gaussian keeps the posterior in the family, gives the Sichel law as the predictive, and puts the expected information gain of a candidate action in closed form, at an order of magnitude less cost per decision than the alternatives that match its accuracy.
-The posterior concentrates on the true rate provided the policy lets accumulated exposure diverge, which for an adaptive sensor is a condition worth checking.
-Whether the third parameter is worth its cost is a question about the field being sensed, and it can be answered from the rates alone before any sensing is designed: on the two physical counting fields we examined the fitted order of the mixing law lies outside the gamma's range, and on a linguistic one it does not.
+Counting experiments with a controllable exposure admit a conjugate model richer than the gamma-Poisson pair: mixing a Poisson rate over a generalised inverse Gaussian keeps the posterior in the family and makes the predictive exact, so expected information gain becomes two deterministic quadratures rather than a nested estimate, and the posterior concentrates if the design lets accumulated exposure diverge.
+The resulting rule beats every criterion that ignores the aleatoric term once the budget cannot cover the contexts, and is the leading-order equal of the closest two-moment surrogate except under differing prior shape, a scarce budget and low counts.
+Whether the third parameter earns its cost is a question about the field, answered from the rates beforehand.
+
+\subsection*{AI use statement}
+
+(This section is \textbf{required} and does not count toward the page limit.)
+
+\wmk{Draft only. What follows is limited to AI use this repository actually records, namely drafting and revising the text and checking reported numbers against the result files. You must decide and state the rest before submission, in particular research ideation, the derivations of Section~\ref{sec:inference} and Appendix~\ref{appx:consistency}, and the experiment code. Check the categories against the AISTATS 2027 AI Policy for Authors, since required and recommended disclosure cover different tasks.}
+
+In this work, we used generative AI tools to draft and revise the text of this manuscript, and to check the numbers reported here against the recorded outputs of the experiments.
+[State here whether generative AI was used for research ideation, for the derivations of Section~\ref{sec:inference} and Appendix~\ref{appx:consistency}, and for the experiment code, together with how that work was verified.]
+We have reviewed all AI-assisted work.
+We take responsibility for the final content of this work, including text, claims, or artifacts produced with the aid of generative AI.
 
 \bibliography{references}
 
@@ -678,9 +556,6 @@ Whether the third parameter is worth its cost is a question about the field bein
 \clearpage
 \newpage
 \section*{Checklist}
-
-
-
 
 \begin{enumerate}
 
@@ -730,9 +605,9 @@ Whether the third parameter is worth its cost is a question about the field bein
 
 % Supplementary material: To improve readability, you must use a single-column format for the supplementary material.
 \onecolumn
-\aistatstitle{Actively sensing overdispersed count data\\ with Sichel distributed predictions:\\ Supplementary Materials}
+\aistatstitle{Sequential experimental design for overdispersed counts\\ with an exact Sichel predictive:\\ Supplementary Materials}
 
-\section{PROOF OF POSTERIOR CONSISTENCY}
+\section{Proof of Posterior Consistency}
 \label{appx:consistency}
 
 Throughout, one context is fixed and its rate is written $\lambda$, with true value $\lambda^{*} > 0$.
@@ -811,12 +686,12 @@ An exact two-sided bound follows from the recurrence alone, and it is the only p
 \end{proof}
 
 The adaptivity of the policy is handled entirely by this lemma, and it is the only place it is needed.
-Nothing later distinguishes an adaptive sensor from one that fixed its inputs in advance.
+Nothing later distinguishes a sequential design from one fixed in advance.
 
 \subsection{Proof of Proposition~\ref{prop:consistency}}
 
 \begin{proof}
-    Assume first that $F_t \to \infty$ almost surely, and work on the almost sure event of Lemma~\ref{lem:lln}, on which $\nu_t \to \infty$ and so $\nu_t > 1$ for all large $t$.
+    Work first on $\{F_{\infty} = \infty\}$, intersected with the almost sure event of Lemma~\ref{lem:lln}, on which $\nu_t \to \infty$ and so $\nu_t > 1$ for all large $t$.
 
     \paragraph{The posterior mean.}
     Apply \eqref{eq:gig_moments_appx} at $n = 1$ and Lemma~\ref{lem:bessel_bracket} at $\nu = \nu_t$, $z = \omega_t$.
@@ -865,14 +740,16 @@ Nothing later distinguishes an adaptive sensor from one that fixed its inputs in
     \end{equation*}
     %
     and both terms vanish almost surely by the two paragraphs above, which is \eqref{eq:consistency}.
-    Concentration follows by Chebyshev's inequality: for any $\epsilon > 0$,
+    Concentration follows by Chebyshev's inequality, since for any $\epsilon > 0$,
     %
     \begin{equation*}
         p\big( |\lambda - \lambda^{*}| > \epsilon \given \mathcal{D}_t \big) \leq \epsilon^{-2} \Ex{p(\lambda \given \mathcal{D}_t)}{(\lambda - \lambda^{*})^{2}} \longrightarrow 0 \,.
     \end{equation*}
+    %
+    The sharper statement \eqref{eq:consistency_rate} needs a finer bound on the same ratio and is proved in Appendix~\ref{appx:consistency_constant}.
 
     \paragraph{The converse.}
-    Suppose instead $F_t \to F_{\infty} < \infty$.
+    Work now on $\{F_{\infty} < \infty\}$.
     Then $\sum_{i} \Pr(y_i > 0 \given \mathcal{F}_{i-1}) = \sum_{i} (1 - e^{-f_i \lambda^{*}}) \leq \lambda^{*} F_{\infty} < \infty$, so by the conditional Borel--Cantelli lemma only finitely many observations are nonzero almost surely.
     Hence $T_t \to T_{\infty} < \infty$, and the posterior converges to $\Gig(\lambda \given \alpha + T_{\infty}, a, b + 2 F_{\infty})$, which has strictly positive variance because $b + 2F_\infty < \infty$.
     The posterior does not concentrate, at any $\lambda^{*}$.
@@ -883,18 +760,62 @@ Nothing later distinguishes an adaptive sensor from one that fixed its inputs in
 
 Bound \eqref{eq:variance_bound} gives the order $1/F_t$ but not the sharp constant, because its second term contributes at the same order as the first.
 The looseness is an artefact of bracketing $R_{\nu_t}$ and $R_{\nu_t + 1} - R_{\nu_t}$ separately, when the variance is a difference of two nearly equal quantities.
-Substituting \eqref{eq:ratio_recursion} into itself once more sharpens \eqref{eq:bracket_upper} to $R_{\nu} = 2\nu/z + z/2\nu + O(z^{3}/\nu^{3})$, uniformly on $\nu / z \to \infty$, which holds here because $\nu_t / \omega_t$ grows like $\lambda^{*} \sqrt{F_t / 2a}$.
-That expansion gives $R_{\nu_t + 1} - R_{\nu_t} = 2/\omega_t + O(\omega_t / \nu_t^{2})$ and hence
+Substituting \eqref{eq:ratio_recursion} into itself once more sharpens \eqref{eq:bracket_upper} to
 %
 \begin{equation}
-    \Var{p(\lambda \given \mathcal{D}_t)}{\lambda} = \frac{4 \nu_t}{b_t^{2}} \big( 1 + o(1) \big) \longrightarrow \frac{\lambda^{*}}{F_t} \,,
+    R_{\nu}(z) = \frac{2\nu}{z} + \frac{z}{2(\nu - 1)} + O(z^{3}/\nu^{3}) \,,
+    \label{eq:ratio_expansion}
+\end{equation}
+%
+uniformly as $\nu / z \to \infty$, which holds here because $\nu_t / \omega_t$ grows like $\lambda^{*} \sqrt{F_t / 2a}$.
+The correction term must be kept at $\nu - 1$ rather than $\nu$, since the two differ by $O(z/\nu^{2})$ and that is larger than $O(z^{3}/\nu^{3})$ in this regime.
+Differencing \eqref{eq:ratio_expansion} at consecutive orders cancels the correction to leading order, because $z/2\nu - z/2(\nu - 1) = -z / 2\nu(\nu - 1)$, and leaves $R_{\nu_t + 1} - R_{\nu_t} = 2/\omega_t + O(\omega_t / \nu_t^{2})$.
+Hence
+%
+\begin{equation}
+    F_t \Var{p(\lambda \given \mathcal{D}_t)}{\lambda} = \frac{4 \nu_t F_t}{b_t^{2}} \big( 1 + o(1) \big) \longrightarrow \lambda^{*} \,,
     \label{eq:variance_rate}
 \end{equation}
 %
-the inverse Fisher information of a Poisson observed at total exposure $F_t$.
-Simulation agrees: across true rates $\lambda^{*} \in \{0.2, 3, 50\}$, orders $\alpha \in \{-3, -0.5, 2\}$ and a prior mean deliberately set to $1$ in every case, the ratio $F_t \Var{}{\lambda} / \lambda^{*}$ reaches $1.000$ to $1.007$ by $F_t = 10^{5}$.
+which is the inverse Fisher information of a Poisson observed at total exposure $F_t$ and proves \eqref{eq:consistency_rate}.
+Simulation agrees.
+Across true rates $\lambda^{*} \in \{0.2, 3, 50\}$, orders $\alpha \in \{-3, -0.5, 2\}$ and a prior mean deliberately set to $1$ in every case, the ratio $F_t \Var{}{\lambda} / \lambda^{*}$ reaches $1.000$ to $1.007$ by $F_t = 10^{5}$.
 
-\section{THE FULL CRITERION-BY-MODEL GRID}
+\section{Figures and Slopes From the Studies}
+\label{appx:figures}
+
+The three figures below accompany Sections~\ref{sec:experiments_verification} to \ref{sec:experiments_photon}. Their numbers appear in Tables~\ref{tab:prediction_slopes}, \ref{tab:bulk} and \ref{tab:photon} of the main text.
+
+\begin{table}[t]
+    \caption{Fitted log-log slopes over the upper half of the sample-size range, by regime. The generating parameters change the constant and not the exponent. The last column is the worst the misspecified gamma-Poisson arm does against ours over the whole range, which in every regime is at the first observation.}
+    \label{tab:prediction_slopes}
+    \centering
+    \footnotesize
+    \input{experiments/tables/slopes}
+\end{table}
+
+%\begin{figure}[t]
+%    \centering
+%    \includegraphics[width=\linewidth]{experiments/experiment-gigpoisson/figures/prediction}
+%    \caption{Prediction error against sample size on data the model specifies exactly, for four regimes of the generating parameters. Shaded bands are two standard errors over $400$ replicate rates. (a) Divergence from the oracle predictive falls as $1/n$. (b) The error in the posterior mean rate falls as $1/\sqrt{n}$. (c) The posterior variance rescaled by $F_n / \Ex{}{\lambda^{*}}$ collapses onto the constant \eqref{eq:consistency_rate} predicts, so the regime sets the constant only through the first few observations.}
+%    \label{fig:prediction}
+%\end{figure}
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\linewidth]{experiments/bulk-sampling/figures/bulk}
+    \caption{Bulk sampling under a processing budget, 48 properties of 12 blocks each. Bands are one standard error. (a) Holding the model fixed and varying the acquisition. (b) Holding the acquisition fixed and varying the mixing law. Note the axis, which spans a fifth of the range in (a). (c) Where the budget went, against what each block was worth. The systematic programme is flat by construction, the informed criteria tilt gently towards blocks with more to learn, and maximum entropy sampling abandons everything but the richest.}
+    \label{fig:bulk}
+\end{figure}
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\linewidth]{experiments/gamma-ray/figures/photon}
+    \caption{Scheduling telescope time across 48 gamma-ray targets on a budget of 120 megaseconds, 24 programmes. (a) Held-out predictive score against telescope time spent, with bands at one standard error. (b) Time given to a target against how bright it turned out to be. Maximum entropy sampling spends the budget on the brightest targets and the informed criteria do not. The measured flux field against each fitted mixing law is the first panel of Figure~\ref{fig:rate_fields}.}
+    \label{fig:photon}
+\end{figure}
+
+\section{The Full Criterion-by-Model Grid}
 \label{appx:grid}
 
 Every criterion was run under every mixing law on the same 48 properties, so that the
@@ -904,22 +825,10 @@ same model, in nats, so that each column is internally comparable and a row that
 across columns is a criterion whose behaviour does not depend on the model carrying it.
 
 \begin{table}[h]
-    \caption{Held-out NLPD relative to expected information gain under the same model, in nats. Positive is worse. Rows are near-constant across columns, which is the point: the cost of the acquisition does not depend on the mixing law.}
+    \caption{Held-out NLPD relative to expected information gain under the same model, in nats. Positive is worse. Rows are near-constant across columns, which is the point, since the cost of the acquisition does not depend on the mixing law.}
     \label{tab:grid}
     \centering
-    \begin{tabular}{lrrr}
-        \toprule
-        criterion & GIG-Poisson & gamma-Poisson & lognormal-Poisson \\
-        \midrule
-        EPIG & $+0.003$ & $-0.002$ & not run \\
-        D-optimality & $+0.001$ & $+0.001$ & $-0.003$ \\
-        Neyman allocation & $+0.015$ & $+0.018$ & $+0.009$ \\
-        epistemic variance & $+0.077$ & $+0.066$ & $+0.083$ \\
-        total variance & $+0.089$ & $+0.079$ & $+0.084$ \\
-        Thompson sampling & $+0.214$ & $+0.219$ & $+0.191$ \\
-        maximum entropy & $+0.302$ & $+0.308$ & $+0.296$ \\
-        \bottomrule
-    \end{tabular}
+    \input{experiments/tables/grid}
 \end{table}
 
 EPIG is not run under the lognormal mixing law. Its outer expectation requires a posterior
@@ -929,5 +838,8 @@ conjugate. The nesting costs more than the rest of the study combined, which is 
 about non-conjugacy rather than about the criterion, and it is recorded here rather than
 passed over.
 
+\section{Underperformance for model mis-specification} \label{appx:newsgroup}
+
+We study the relative rates of $1123$ terms across the twenty corpora of 20 Newsgroups.
 
 \end{document}

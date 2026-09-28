@@ -22,6 +22,7 @@ the discussion.
 from methods.countmodels import GammaPoisson, GIGPoisson, LognormalPoisson
 
 from .base import Agent, ScoredAgent          # noqa: F401
+from .bo import BayesOptEI, BayesOptUCB
 from .dopt import DOptimality
 from .eig import EIG
 from .epig import EPIG
@@ -47,8 +48,14 @@ ALTERNATIVE_MODELS = (GammaPoisson, LognormalPoisson)
 CROSSED = (EIG, MaxEntropy, DOptimality, Neyman, TotalVariance, EpistemicVariance,
            Thompson)
 
+#: Bayesian optimisation on a Gaussian process with a Poisson output. Kept out of the
+#: default set on purpose: it is the only member that pools across contexts, it carries its
+#: own surrogate rather than one of the mixing laws, and adding it silently would change
+#: what every existing study writes. Opt in with ``build_all(include_bo=True)``.
+BAYESOPT = (BayesOptEI, BayesOptUCB)
 
-def build_all(cross="models"):
+
+def build_all(cross="models", include_bo=False):
     """Every agent in the study.
 
     ``cross`` selects how much of the criterion-by-model grid to run:
@@ -60,6 +67,9 @@ def build_all(cross="models"):
 
     The belief-free designs (systematic, random) are run once whatever the setting, since
     they never consult a model.
+
+    ``include_bo`` appends :data:`BAYESOPT`. It defaults off so that every study already in
+    the repository writes exactly what it wrote before this was added.
     """
     out = [cls() for cls in CRITERIA]
     if cross == "models":
@@ -68,6 +78,8 @@ def build_all(cross="models"):
         for m in ALTERNATIVE_MODELS:
             out += [cls(model=m()) for cls in CROSSED]
             out += [EPIG(model=m())] if m is not LognormalPoisson else []
+    if include_bo:
+        out += [cls() for cls in BAYESOPT]
     return out
 
 
@@ -76,7 +88,7 @@ LABELS = {a.name: a.label for a in build_all()}
 
 
 def build(name):
-    for a in build_all():
+    for a in build_all(include_bo=True):
         if a.name == name:
             return a
     raise ValueError("unknown agent {!r}; known: {}".format(name, ", ".join(NAMES)))
