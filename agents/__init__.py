@@ -19,16 +19,19 @@ relevant once the context set is given spatial structure, which is the extension
 the discussion.
 """
 
-from methods.countmodels import GammaPoisson, GIGPoisson, LognormalPoisson
+from methods.countmodels import (GammaPoisson, GIGPoisson, LogNormalLikelihood,
+                                 LognormalPoisson)
 
 from .base import Agent, ScoredAgent          # noqa: F401
 from .bo import BayesOptEI, BayesOptUCB
 from .dopt import DOptimality
+from .dad import AmortisedDesign
 from .eig import EIG
+from .lucb import BayesLUCB
 from .epig import EPIG
 from .maxent import MaxEntropy
 from .neyman import Neyman
-from .systematic import Systematic
+from .systematic import BudgetedSystematic, Systematic
 from .thompson import Thompson
 from .uniform_random import RandomAgent
 from .variance import EpistemicVariance, TotalVariance
@@ -39,6 +42,12 @@ CRITERIA = (EIG, EPIG, MaxEntropy, DOptimality, Neyman, TotalVariance,
 
 #: Mixing laws compared under the proposed criterion.
 ALTERNATIVE_MODELS = (GammaPoisson, LognormalPoisson)
+
+#: A lognormal *likelihood* on the counts rather than a mixing law over the rate: the other
+#: standard remedy for overdispersion, and the one practitioners reach for most often. Kept
+#: out of :data:`ALTERNATIVE_MODELS` so that every study already in the repository writes
+#: exactly what it wrote before. Opt in with ``build_all(include_extra_models=True)``.
+EXTRA_ALTERNATIVE_MODELS = (LogNormalLikelihood,)
 
 
 #: Criteria carried across every model. EPIG is excluded from the non-conjugate model: its
@@ -55,7 +64,7 @@ CROSSED = (EIG, MaxEntropy, DOptimality, Neyman, TotalVariance, EpistemicVarianc
 BAYESOPT = (BayesOptEI, BayesOptUCB)
 
 
-def build_all(cross="models", include_bo=False):
+def build_all(cross="models", include_bo=False, include_extra_models=False):
     """Every agent in the study.
 
     ``cross`` selects how much of the criterion-by-model grid to run:
@@ -78,6 +87,8 @@ def build_all(cross="models", include_bo=False):
         for m in ALTERNATIVE_MODELS:
             out += [cls(model=m()) for cls in CROSSED]
             out += [EPIG(model=m())] if m is not LognormalPoisson else []
+    if include_extra_models:
+        out += [EIG(model=m()) for m in EXTRA_ALTERNATIVE_MODELS]
     if include_bo:
         out += [cls() for cls in BAYESOPT]
     return out
@@ -88,7 +99,44 @@ LABELS = {a.name: a.label for a in build_all()}
 
 
 def build(name):
-    for a in build_all(include_bo=True):
+    for a in build_all(include_bo=True, include_extra_models=True):
         if a.name == name:
             return a
     raise ValueError("unknown agent {!r}; known: {}".format(name, ", ".join(NAMES)))
+
+
+def build_comparison():
+    """The five agents of the head-to-head study on the two overdispersed settings.
+
+    The proposed criterion under two conjugate mixing laws, the non-conjugate route
+    (log-skew-normal prior, MCMC posterior, nested Monte Carlo EIG), and Bayesian
+    optimisation by expected improvement on a GP-Poisson surrogate under two kernels.
+    The binned lognormal likelihood was dropped after the first round of studies: it cost
+    two orders of magnitude more per round than any other agent and was never competitive.
+    """
+    from methods.gppoisson import GPPoisson
+    from methods.gammamixture import GammaMixturePoisson
+    from methods.logskewnormal import LogSkewNormalPoisson, LogSkewNormalQuad
+    return [EIG(),
+            EIG(model=GammaPoisson()),
+            EIG(model=LogSkewNormalPoisson()),
+            BayesOptEI(),
+            BayesOptEI(model=GPPoisson(kernel="categorical")),
+            # Non-adaptive allocation, predicting with the proposed model.
+            BudgetedSystematic(),
+            RandomAgent(),
+            # Other acquisitions under the proposed model, and the top-m rule under both
+            # conjugate models, which is where the mixing law can reach the regret.
+            DOptimality(),
+            Thompson(),
+            BayesLUCB(),
+            BayesLUCB(model=GammaPoisson()),
+            # A flexible conjugate rival, the exact non-conjugate route, and the sampled
+            # route with an inner sample eight times larger.
+            EIG(model=GammaMixturePoisson()),
+            EIG(model=LogSkewNormalQuad()),
+            EIG(model=LogSkewNormalPoisson(n_chains=1024 + 8192, n_outer=1024,
+                                           name="logskewnormal-poisson-m8k",
+                                           label="log-skew-normal Poisson (MCMC + NMC, M = 8192)")),
+            # An amortised, non-myopic policy trained offline on the agent's own model.
+            AmortisedDesign()]

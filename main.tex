@@ -105,25 +105,24 @@
 
 \twocolumn[
 
-\aistatstitle{Sequential experimental design for overdispersed counts\\ with Sichel distributed predictions}
+\aistatstitle{Sequential experimental design for overdispersed count rates\\ with Sichel distributed predictions}
 
 \aistatsauthor{Anonymous Author}
 
 \aistatsaddress{Anonymous Institution} ]
 
 \begin{abstract}
-Overdispersed count rates refers to phenomena in which the count variance exceeds the average count rate. Examples include looking for diamonds in carbon-rich sedimentary layers, counting photons in gamma-ray observation, or the spike count rate in populations of neurons. We propose a procedure for sequential Bayesian experimental design under a Poisson likelihood whose rate is modulated multiplicatively with an exposure function. The prior distribution over the rate parameter is a generalized inverse Gaussian prior, which is conjugate and yields an exact posterior predictive distributed as the Sichel law. Expected information gain is then calculated from two deterministic quadrature operations, providing a faster alternative to nested Monte Carlo sampling.
+Overdispersed count rates refer to phenomena in which the count variance exceeds the average count rate. Examples include looking for diamonds in carbon-rich sedimentary layers, counting photons in gamma-ray observation, or the spike count rate in populations of neurons. We propose a procedure for sequential Bayesian experimental design under a Poisson likelihood whose rate is modulated multiplicatively with an exposure function. The prior distribution over the rate parameter is a generalized inverse Gaussian prior, which is conjugate and yields an exact posterior predictive distributed as the Sichel law. Expected information gain is then calculated from two deterministic quadrature operations, providing a faster alternative to nested Monte Carlo sampling.
 We show that the posterior concentrates if the accumulated exposure diverges, which is a persistence-of-excitation condition on exposure rather than on sample size. The proposed procedure is compared to state-of-the-art methods in three natural settings.
 \end{abstract}
 
 \section{Introduction}
 \label{sec:intro}
 
-Counting is fundamental to many fields of science and engineering. For example, in astronomy, photons are recorded over a period of time, and, in ecology, a camera trap counts the number of wolves passing by per week. In all these experiments, an experimenter has to choose how long the detector keeps counting, refered to as dwell time. Using the information obtained so far to optimize dwell time is called sequential optimal experimental design \citep{lindley1956measure,chaloner1995bayesian}. In phenomena with \emph{overdispersed} counts, the variance of the counts exceeds the average count. For example, in gamma ray observation, the detector will often pick up barely anything but occasionally it will detect millions of photons, which means its count variance is orders of magnitude larger than the average count. The overdispersed natura of these phenomena is a challenge for sequential experimental design.
+Counting is fundamental to many fields of science and engineering. For example, in astronomy, photons are recorded over a period of time, and, in ecology, a camera trap counts the number of wolves passing by per week. In all these experiments, an experimenter has to choose how long the detector keeps counting, refered to as dwell time. Using the information obtained so far to optimize dwell time is called sequential optimal experimental design \citep{lindley1956measure,chaloner1995bayesian}. In phenomena with \emph{overdispersed} counts, the variance of the counts exceeds the average count. For example, in gamma ray observation, the detector will often pick up barely anything but occasionally it will detect millions of photons, which means its count variance is orders of magnitude larger than the average count. The overdispersed nature presents a modelling challenge.
 
-The expected information gain is an expectation of a Kullback-Leibler divergence over a predictive distribution \citep{ryan2016review,huan2024optimal}. In a conjugate family such as Gamma-Poisson, the predictive is negative binomially distributed which lacks the expressiveness to capture tail probabilities accurately. Outside a conjugate family, the expected information gain must be estimated by nested Monte Carlo, which is computationally expensive and ill-suited for sequential design with short dwell times \citep{rainforth2018nesting,rainforth2024modern}. We opt to stay in a conjugate family, and will use the generalised inverse Gaussian distribution as a prior for the count rate. Its predictive is the Sichel distribution which has an additional parameter to describe tail probabilities and allows for deterministic quadrature procedures for calculating expected information gain \citep{sichel1975distribution,stein1987parameter}.
+The expected information gain is an expectation of a Kullback-Leibler divergence over a predictive distribution \citep{ryan2016review,huan2024optimal}. In a conjugate family such as Gamma-Poisson, the predictive is negative binomially distributed but lacks expressiveness in capturing tail probabilities accurately. Outside a conjugate family, the expected information gain must be estimated by nested Monte Carlo, which is computationally expensive and ill-suited for sequential design with short dwell times \citep{rainforth2018nesting,rainforth2024modern}. We stay in a conjugate family, and will use the generalised inverse Gaussian distribution \citep{jorgensen1982statistical} as a prior for the count rate. Its predictive is the Sichel distribution which has an additional parameter to describe tail probabilities \citep{sichel1975distribution,stein1987parameter}.
 
-\paragraph{Related work.}
 In active learning the same quantity is BALD \citep{houlsby2011bald}, with maximum entropy sampling \citep{sebastiani2000maximum} dropping the aleatoric term and EPIG \citep{smith2023prediction} the prediction-oriented alternative; it also appears as sensor management \citep{kreucher2005sensor,hero2008information,yu2009active}, source search \citep{vergassola2007infotaxis,hutchinson2018entrotaxis} and astronomical scheduling \citep{loredo2004bayesian}.
 Across that work expected information gain is estimated rather than computed, and those estimators carry a bias no sample size removes \citep{rainforth2024modern}.
 We give a count family in which the quantity they approximate is available directly, taking a mixing law from the classical conjugate analysis of exponential families \citep{diaconis1979conjugate,gutierrez1997exponential,chen2003conjugate} with one parameter more.
@@ -132,126 +131,100 @@ We give a count family in which the quantity they approximate is available direc
 
 \section{Problem statement} \label{sec:problem}
 
-Let $y \in \mathbb{N}$ be a set of counts and $\tau \in [0, \infty)$ be a dwell time. There are $K$ contexts, with context $k$ emitting events at an unknown rate $\lambda_k$. A design $u = (k,\tau)$ is a context and dwell time selection. Designs are chosen one at a time, until the time budget is spent. Let $\mathcal{D}_t = \{(y_i, u_i)\}_{i=1}^{t}$ be the designs selected and counts observed up to time $t$, and $\mathcal{V} = \{(y_j, u_j)\}_{j=1}^{n}$ be a held out test set of designs and counts.
+Let $y \in \mathbb{N}$ be a set of counts and $\tau \in [0, \infty)$ be a dwell time. There are $K \in \mathbb{N}$ contexts, with context $k$ emitting events at an unknown true rate $\lambda^{*}_k \in [0, \infty)$. A design $u \in \mathcal{U}$ consists of a context $k$ and a dwell time $\tau$. Designs are chosen one at a time, until the time budget is spent. $\mathcal{U}$ is finite, and the set $\mathcal{U}_k \subseteq \mathcal{U}$ of designs at context $k$ is non-empty for every $k$.
 
-There are three metrics of interest. First, data must be acquired such that the average surprisal on the test set is minimal. The surprisal is calculated as the negative log probability of test data under a posterior predictive distribution:
+There are three metrics of interest. First, data must be acquired such that the average surprisal on the test set is minimal. Let $\mathcal{D}_t = \{(y_i, u_i)\}_{i=1}^{t}$ be the designs selected and counts observed up to time $t$, and $\mathcal{V} = \{(y_j, u_j)\}_{j=1}^{n}$ be a held out test set of designs and counts. The surprisal is calculated as the negative log probability of test data under a posterior predictive distribution:
 \begin{equation}
-	S = \sum_{j=1}^{n} - \ln p(y_j \given u_j, \mathcal{D}_t) \, .
+	L = \frac{1}{n} \sum_{j \in \mathcal{V}} - \ln p(y_j \given u_j, \mathcal{D}_t) \, .
 \end{equation}
-Secondly, the model must identify as quickly as possible the context for which the count rate is maximal, $k^{*}$. That estimate is extracted from a posterior distribution over $\lambda_k$ that evolves over time, i.e., $\hat{k}_t = \arg \max_{k} p(\lambda_k \given \mathcal{D}_t)$. The goal is to minimize the regret up to time $T$,
+Secondly, the model must identify as quickly as possible the top-$m$ contexts for which the count rate is maximal. The true top is $S^{*} $, the subset of $\{1, \dots, K\}$ with the $m$ largest true rates $\lambda^{*}_k$.
+The performance of the model in selecting these contexts is expressed in terms of simple regret at specific checkpoints in the experiment. Simple regret is calculated as
 \begin{equation}
-	R = \sum_{t=1}^T | k^* - \hat{k}_t | \, .
+	R_t = 1 - \frac{\sum_{k \in S_t} \lambda_k}{\sum_{k \in S^{*}} \lambda_k} \, ,
+	\label{eq:regret}
 \end{equation}
+where $S_t$ is the set of $m$ largest $\lambda_k$ under the posterior distribution after observing $t$ designs and resulting outputs, $p(\lambda_k \given \mathcal{D}_t)$.
 Lastly, we time models on the computational cost of inference, in terms of average number of seconds to select a new design.
 
 \section{Model specification}
 \label{sec:model}
 
-Counts are modelled as Poisson distributed with rate parameter $\lambda$,
+Counts are modelled as Poisson distributed with rate parameter $\lambda$ and exposure function $f(u)$,
 \begin{equation}
-    p(y \given u, \lambda_k) = \mathcal{P}\big(y \given f(u) \lambda_k \big) \,,
+    p(y \given u, \lambda_k) = \mathcal{P}\big(y \given f(u) \lambda_k \big) \, .
     \label{eq:likelihood}
 \end{equation}
-and exposure function $f(u)$.
 
 \begin{assumption}[Multiplicative exposure]
     \label{as:exposure}
-    The action acts on the rate through a known scalar $f(u)$, which does not depend on the rates.
+    The design acts on the rate $\lambda_k$ through a multiplicative scalar $f(u)$, independent of the rate itself.
 \end{assumption}
+The assumption indicates that no rate observable through another. The rates are independent under the prior and the likelihood factorises across contexts, so the rest of this section treats a single context and writes $\lambda$ for its rate.
 
-Assumption~\ref{as:exposure} carries the analytic results below: an action decides how much is measured and not which rate, and no action renders one rate observable through another.
-The rates are independent under the prior and the likelihood factorises across contexts, so the rest of this section treats a single context and writes $\lambda$ for its rate.
-
-The Fano factor is
-\begin{equation}
-    F(u) = 1 + f(u) \frac{\Var{p(\lambda)}{\lambda}}{\Ex{p(\lambda)}{\lambda}} \,.
-    \label{eq:fano}
-\end{equation}
-
-Two properties of \eqref{eq:fano} matter.
-First, the departure from equidispersion is a function of the action: a Poisson process has $F = 1$ everywhere, whereas here the second term grows linearly in the exposure, so how overdispersed the observations are is itself something the design decides.
-Second, a negative binomial already has a free mean and variance, so overdispersion alone is no reason to leave the conjugate pair; what \eqref{eq:gig} adds is a third parameter which, with the predictive mean and variance held fixed, still moves mass between the centre and the tail, which is why the count-modelling literature reaches for the Sichel on data at once overdispersed, skewed and inflated at zero.
-
-Write $\Gig$ for the generalised inverse Gaussian law,
-%
+Our prior distribution for the rate $\lambda$ is the generalised inverse Gaussian (GIG) distribution,
 \begin{equation}
     \begin{split}
-        p(\lambda) &= \Gig(\lambda \given \alpha, a, b) \\
-        &= \frac{(b/a)^{\alpha/2}}{2 K_{\alpha}(\sqrt{ab})} \lambda^{\alpha - 1} \exp\big( -(a/\lambda + b \lambda)/2 \big) \,,
+        p(\lambda) &= \Gig(\lambda \given \nu, a, b) \\
+        &= \frac{(b/a)^{\nu/2}}{2 K_{\nu}(\sqrt{ab})} \lambda^{\nu - 1} \exp\big( -(\frac{a}{\lambda} + b \lambda)/2 \big) \,,
     \end{split}
     \label{eq:gig}
 \end{equation}
 %
-with order $\alpha \in \mathbb{R}$, scale parameters $a, b > 0$, and $K_{\alpha}$ the modified Bessel function of the second kind.
+with order $\nu \in \mathbb{R}$, scale parameters $a, b > 0$, and $K_{\nu}$ the modified Bessel function of the second kind.
+Its three parameters separate once $(a, b)$ is traded for a scale and a concentration.
 
-Its three parameters separate once $(a, b)$ is traded for a scale $\eta = \sqrt{a/b}$ and a concentration $\omega = \sqrt{ab}$, because the mean of \eqref{eq:gig} is then
-%
+\begin{lemma}
+    \label{lem:gig_moments}
+    Let $\eta = \sqrt{a/b}$ and $\omega = \sqrt{ab}$ be the scale and concentration of the GIG distribution, respectively, and $R_{\nu+1}(\omega) = K_{\nu+1}(\omega) / K_{\nu}(\omega)$.
+    Then, for every real $n$, the non-central moments are
+    \begin{equation}
+    		\Ex{p(\lambda)}{\lambda^{n}} = \eta^{n} R_{\nu+n}(\omega) \, ,
+	\end{equation} 
+	and, thus, the mean $\mu$ and variance $V$ of $p(\lambda)$ are, 
+    %
+    \begin{equation}
+        \mu \! = \! \eta R_{\nu+1}(\omega) , \ \ V \! = \! \eta^{2} R_{\nu} (\omega) \big( R_{\nu + 1}(\omega) \! - \! R_{\nu}(\omega) \big) .
+        \label{eq:gig_moments}
+    \end{equation}
+\end{lemma}
+
+These are Eqs.~(2.16), (2.19) and (2.21) of \citet{jorgensen1982statistical}, whose scale, concentration and ratio $R$ we adopt.
+The moments hold because multiplying the kernel of \eqref{eq:gig} by $\lambda^{n}$ gives its kernel at order $\nu + n$, so each is a ratio of two normalising constants.
+Requiring a particular mean fixes $\eta$ in closed form and leaves $\nu$ and $\omega$ free, so the expected count a context and the uncertainty about it are set independently.
+Note that the gamma distribution is a special case of this family. As $\omega \to 0$ with $\nu > 0$, \eqref{eq:gig} tends to a gamma of shape $\nu$ and rate $b/2$.
+
+The Fano factor under this choice of likelihood is
 \begin{equation}
-    \Ex{p(\lambda)}{\lambda} = \eta \frac{K_{\alpha + 1}(\omega)}{K_{\alpha}(\omega)} \,.
-    \label{eq:gig_mean}
+    F(u) = 1 + f(u) \frac{\Var{p(\lambda)}{\lambda}}{\Ex{p(\lambda)}{\lambda}} \, .
+    \label{eq:fano}
 \end{equation}
-%
-Requiring a particular mean fixes $\eta$ in closed form and leaves $\alpha$ and $\omega$ free, so the brightness of a context and the shape of the uncertainty about it are set independently.
-
-The gamma is a boundary of this family rather than a competitor: as $\omega \to 0$ with $\alpha > 0$, \eqref{eq:gig} tends to a gamma of shape $\alpha$ and rate $b/2$ and the marginal of \eqref{eq:likelihood} to a negative binomial, written $\NBin$.
-The conjugate Poisson pair is therefore contained in the model, at one edge of a parameter it is otherwise free to move.
-
-%\subsection{Predictive Dispersion}
-%\label{sec:model_dispersion}
-%
-%Marginalising the rate out of \eqref{eq:likelihood} gives the Sichel law $\Sic$, whose mass function is a ratio of normalising constants of \eqref{eq:gig} and is deferred to Section~\ref{sec:inference}.
-%Its first two moments follow from total expectation and variance without it,
-%%
-%\begin{align}
-%    \Ex{p(y \given u)}{y} &= f(u) \Ex{p(\lambda)}{\lambda} \,, \label{eq:predictive_mean} \\
-%    \Var{p(y \given u)}{y} &= f(u) \Ex{p(\lambda)}{\lambda} + f(u)^{2} \Var{p(\lambda)}{\lambda} \,, \label{eq:predictive_variance}
-%\end{align}
-%%
-%so that their ratio, the Fano factor, is
-%%
-%\begin{equation}
-%    F(u) = 1 + f(u) \frac{\Var{p(\lambda)}{\lambda}}{\Ex{p(\lambda)}{\lambda}} \,.
-%    \label{eq:fano}
-%\end{equation}
-%
-%Two properties of \eqref{eq:fano} matter.
-%First, the departure from equidispersion is a function of the action: a Poisson process has $F = 1$ everywhere, whereas here the second term grows linearly in the exposure, so how overdispersed the observations are is itself something the design decides.
-%Second, a negative binomial already has a free mean and variance, so overdispersion alone is no reason to leave the conjugate pair; what \eqref{eq:gig} adds is a third parameter which, with the predictive mean and variance held fixed, still moves mass between the centre and the tail, which is why the count-modelling literature reaches for the Sichel on data at once overdispersed, skewed and inflated at zero.
-%
-%Table~\ref{tab:tail_mass} measures that freedom and locates it.
-%The order cannot be raised without limit: at the gamma boundary the mixing law is a gamma of shape equal to the order, so a requested dispersion is reachable only below $\alpha = \Ex{}{\lambda}^{2}/\Var{}{\lambda}$, which is exactly the shape of the moment-matched negative binomial, and every order below that is a predictive no gamma can produce.
-%Moving down the range multiplies the mass beyond $y = 100$ by up to $392$ and divides the mass at zero by up to $4$ while the first two moments do not move, whereas at $y = 30$, three and a half standard deviations out, the mass changes by less than a fifth.
-%The freedom is therefore in the far tail and at zero, not where a held-out predictive score weighs most, which is worth recalling when Section~\ref{sec:experiments_bulk} finds the choice of mixing law worth little.
+A standard Poisson process has a Fano factor of $1$. Values below $1$ indicate underdispersion while values above indicate overdispersion. Note that the above Fano factor will always be greater than or equal to $1$, which means the multiplicative exposure Poisson likelihood is only suited for overdispersed count data. The exposure function controls the amount of overdispersion. 
+A negative binomial has a free mean and variance, and can also adapt to overdispersion. However, the GIG distribution adds a third parameter so that the Sichel distribution has the capacity to, with the predictive mean and variance held fixed, move probability mass between the centre and the tail (see Lemma~\ref{lem:sichel_tail}). It is thus a strictly more flexible model.
 
 \section{Inference}
 \label{sec:inference}
 
-A sequential design needs to know what a count tells it about the rate, and what to expect of the next count before committing to an action.
-Conjugacy of the generalised inverse Gaussian with a Poisson likelihood makes both exact \citep{diaconis1979conjugate}, though neither survives evaluation in the arrangement in which it is most compactly written, which Remark~\ref{rem:conditioning} takes up.
 
 \subsection{Updating parameters}
 \label{sec:inference_update}
 
 Under \eqref{eq:likelihood} and \eqref{eq:gig}, a count $y$ observed at action $u$ yields
 \begin{equation}
-    p(\lambda \given y, u) = \Gig\big(\lambda \given \alpha + y, \, a, \, b + 2 f(u) \big) \,. \label{eq:posterior}
+    p(\lambda \given y, u) = \Gig\big(\lambda \given \nu + y, \, a, \, b + 2 f(u) \big) \,. \label{eq:posterior}
 \end{equation}
 Multiplying \eqref{eq:likelihood} by \eqref{eq:gig} and dropping every factor free of $\lambda$ leaves the kernel of \eqref{eq:gig} at the stated parameters.
 The count enters only through the order and the action only through the second scale parameter, additively, so an exposure delivered in one measurement updates the belief exactly as the same exposure split across several.
-The first scale parameter $a$ is never revised, because a Poisson likelihood carries information only through $\lambda^{y} e^{-f(u) \lambda}$ and neither factor has the $1/\lambda$ form that $a$ multiplies, so whatever weight the prior places on very small rates survives counting untouched. Repeating the update for $n$ time steps gives an update of $\nu + \sum_{i=1}^{n} y_i$ and $b + \sum_{i=1}^{n} f(u_i)$, which is free of order.
-
-A belief is therefore two numbers per context whatever the horizon, both sums, so the posterior does not depend on the order of measurement.
-The second is chosen by the experimenter, which raises a question a fixed design need not answer.
+The first scale parameter $a$ is never revised, because a Poisson likelihood carries information only through $\lambda^{y} e^{-f(u) \lambda}$ and neither factor has the $1/\lambda$ form that $a$ multiplies, so whatever weight the prior places on very small rates survives counting untouched. Repeating the update for $n$ time steps gives an update of $\nu + \sum_{i=1}^{n} y_i$ and $b + 2 \sum_{i=1}^{n} f(u_i)$, which is free of order.
 
 %Write $F_t = \sum_{i \leq t} f(u_i)$, with the actions adapted, so $u_i$ may depend on everything observed before it.
 The Fisher information up to time $t$ is:
 \begin{equation}
-	F_t = \mathbb{E} \big[ \frac{\partial}{\partial \lambda} \ln p(y \given u, \lambda_k) \given \lambda \big] = \sum{i < t} \frac{f(u_i)}{\lambda} \, .
+	F_t = \mathbb{E} \Big[ \frac{\partial}{\partial \lambda} \ln p(y \given u, \lambda_k) \given \lambda \Big] = \sum_{i < t} \frac{f(u_i)}{\lambda} \, .
 \end{equation}
 
 \begin{proposition}[Posterior consistency]
     \label{prop:consistency}
-    Fix a context with true rate $\lambda^{*} > 0$ and a prior \eqref{eq:gig} with $a, b > 0$ and $\alpha \in \mathbb{R}$.
+    Fix a context with true rate $\lambda^{*} > 0$ and a prior \eqref{eq:gig} with $a, b > 0$ and $\nu \in \mathbb{R}$.
     Since $F_t$ is non-decreasing it has a limit $F_{\infty} \in (0, \infty]$, and the two cases partition the sample space.
     On the event $\{F_{\infty} = \infty\}$,
     %
@@ -280,60 +253,53 @@ The unrevised $a$ does not obstruct concentration, entering the proof only throu
 \subsection{Posterior predictive distribution}
 \label{sec:inference_predictive}
 
-Because \eqref{eq:posterior} returns the family to itself, $(\alpha, a, b)$ denotes the current belief, prior and posterior alike, and the history is dropped from the notation.
+Because \eqref{eq:posterior} returns the family to itself, $(\nu, a, b)$ denotes the current belief, prior and posterior alike, and the history is dropped from the notation.
 
 \begin{proposition}[Posterior predictive]
     \label{prop:predictive}
-    Under the belief $\Gig(\lambda \given \alpha, a, b)$, the count returned by action $u$ has mass function
+    Under the belief $\Gig(\lambda \given \nu, a, b)$, the count returned by action $u$ has mass function
     %
     \begin{equation}
-        p(y \given u, \mathcal{D}) = \frac{(f(u) \eta_u)^{y}}{y!} \Big( \frac{\eta_u}{\eta} \Big)^{\alpha} \frac{K_{\alpha + y}(\omega_u)}{K_{\alpha}(\omega)} \,,
+        p(y \given u, \mathcal{D}) = \frac{(f(u) \eta_u)^{y}}{y!} \Big( \frac{\eta_u}{\eta} \Big)^{\nu} \frac{K_{\nu + y}(\omega_u)}{K_{\nu}(\omega)} \,,
         \label{eq:sichel}
     \end{equation}
     %
-    where $\eta_u = \sqrt{a / (b + 2 f(u))}$ and $\omega_u = \sqrt{a (b + 2 f(u))}$ are the scale and concentration of the updated belief in the coordinates of \eqref{eq:gig_mean}.
+    where $\eta_u = \sqrt{a / (b + 2 f(u))}$ and $\omega_u = \sqrt{a (b + 2 f(u))}$ are the scale and concentration of Lemma~\ref{lem:gig_moments} for the updated belief.
 \end{proposition}
 
-Equation~\eqref{eq:sichel} is the Sichel law $\Sic$ \citep{sichel1975distribution,stein1987parameter} and follows from Proposition~\ref{prop:update} without further integration, the marginal being the ratio of the two normalising constants times the rate-free factor of the Poisson mass.
+Equation~\eqref{eq:sichel} is the Sichel law $\Sic$ \citep{sichel1975distribution,stein1987parameter}.
+It is Eq.~(4) of \citet{sichel1973statistical} at unit exposure, and other exposures only rescale the rate.
 Every dependence on the action is carried by $f(u)$ through $(\eta_u, \omega_u)$, so a grid of candidates is scored against a belief computed once; the support is unbounded, so a functional that is not a moment, the entropy in particular, is a truncated sum over it.
 
-\begin{remark}[An exact form is not an evaluation recipe]
-    \label{rem:conditioning}
-    Equation~\eqref{eq:sichel} must not be evaluated as written.
-    $K_{\alpha + y}$ overflows double precision at moderate order, and by Corollary~\ref{cor:sufficient} the order a belief carries is $\alpha + \sum_i y_i$, which grows without bound; in Section~\ref{sec:experiments_verification} a direct call overflows after four measurements.
-    Every quantity is therefore accumulated in logarithms, and the run of orders a support sum needs comes by one of two routes.
-    The recurrence $K_{\nu + 1}(z) = K_{\nu - 1}(z) + (2 \nu / z) K_{\nu}(z)$ adds two positive quantities, so nothing cancels, but its rounding compounds, reaching $3 \times 10^{-7}$ after $2 \times 10^{5}$ orders where the uniform asymptotic expansion is still exact.
-    Short runs take the recurrence and long runs the expansion, and which is needed is set by the weight of the predictive tail.
-\end{remark}
+%\begin{remark}[An exact form is not an evaluation recipe]
+%    \label{rem:conditioning}
+%    Equation~\eqref{eq:sichel} must not be evaluated as written.
+%    $K_{\nu + y}$ overflows double precision at moderate order, and the order a belief carries is $\nu + \sum_i y_i$, which grows without bound; in Section~\ref{sec:experiments_verification} a direct call overflows after four measurements.
+%    Every quantity is therefore accumulated in logarithms, and the run of orders a support sum needs comes by one of two routes.
+%    The recurrence $K_{\alpha + 1}(z) = K_{\alpha - 1}(z) + (2 \alpha / z) K_{\alpha}(z)$ adds two positive quantities, so nothing cancels, but its rounding compounds, reaching $3 \times 10^{-7}$ after $2 \times 10^{5}$ orders where the uniform asymptotic expansion is still exact.
+%    Short runs take the recurrence and long runs the expansion, and which is needed is set by the weight of the predictive tail.
+%\end{remark}
 
 \subsection{Information gain per action}
 \label{sec:inference_acquisition}
 
 A candidate design is scored by the mutual information between $\lambda$ and $y$ under the current belief \citep{lindley1956measure,houlsby2011bald},
 %
-\begin{equation}
-    \begin{split}
-        G(u) &= \Ex{p(y \given u, \mathcal{D})}{ D_{\text{KL}}\big[ p(\lambda \given y, u, \mathcal{D}) \,\|\, p(\lambda \given \mathcal{D}) \big] } \\
-        &= H\big[ p(y \given u, \mathcal{D}) \big] - A(u) \,,
-    \end{split}
-    \label{eq:eig}
-\end{equation}
+\begin{align}
+        G(u) &= \mathbb{E}_{p(y \given u, \mathcal{D})} \Big[ D_{\text{KL}}\big[ p(\lambda \given y, u, \mathcal{D}) \,\|\, p(\lambda \given \mathcal{D}) \big] \Big]  \label{eq:eig} \\
+        &= H\big[ p(y | u, \mathcal{D}) \big] - \mathbb{E}_{p(\lambda | \mathcal{D})} \Big[ H\big[ p(y | u, \lambda) \big] \Big] .
+    \label{eq:aleatoric} 
+\end{align}
 %
-the second line being the usual rearrangement into a predictive entropy less an expected conditional one,
-%
-\begin{equation}
-    A(u) = \Ex{p(\lambda \given \mathcal{D})}{ H\big[ \mathcal{P}\big(y \given f(u) \lambda \big) \big] } \,.
-    \label{eq:aleatoric}
-\end{equation}
 
 Under \eqref{eq:likelihood} and \eqref{eq:gig} both terms are integrals against known densities and neither needs a sample: the first is a sum of \eqref{eq:sichel} over the support of the predictive, the second a one-dimensional integral of the Poisson entropy against the belief.
 Neither is closed form, the support being unbounded and the Poisson entropy having no elementary expression, but both are \emph{deterministic}, so \eqref{eq:eig} carries no Monte-Carlo error, no sample size to tune and no nesting bias, which is what an estimator outside a conjugate family must accept \citep{rainforth2018nesting,rainforth2024modern}.
-Both are cheap because Proposition~\ref{prop:predictive} puts every dependence on the action in $f(u)$ and \eqref{eq:aleatoric} integrates over one positive variable.
+Both are cheap because the parameter update (Eq.~\ref{eq:posterior}) puts every dependence on the action in $f(u)$ and \eqref{eq:aleatoric} integrates over one positive variable.
 The support sum is sized from \eqref{eq:predictive_mean} and \eqref{eq:predictive_variance} and widened until the tail mass outside meets a tolerance of $10^{-9}$, a normal-tail estimate not being conservative here; the second term is a $64$-node Gauss-Legendre rule in $\log \lambda$.
 Both accumulate in logarithms, for the reason Remark~\ref{rem:conditioning} gives.
 
-The decomposition in \eqref{eq:eig} separates the criteria compared in Section~\ref{sec:experiments}: EPIG \citep{smith2023prediction}, local D-optimality \citep{chaloner1995bayesian}, Neyman allocation \citep{neyman1992two}, uncertainty sampling in a total and an epistemic form \citep{griffiths2019heteroscedastic}, Thompson sampling, maximum entropy sampling \citep{sebastiani2000maximum}, and the belief-free systematic and random designs.
-Maximum entropy sampling is \eqref{eq:eig} with $A(u)$ dropped, and a Poisson entropy grows with its mean, roughly as $\tfrac{1}{2}\log(2\pi e f(u) \lambda)$, so dropping $A(u)$ rewards an action for the noise it collects instead of the uncertainty it removes.
+%The decomposition in \eqref{eq:eig} separates the criteria compared in Section~\ref{sec:experiments}: EPIG \citep{smith2023prediction}, local D-optimality \citep{chaloner1995bayesian}, Neyman allocation \citep{neyman1992two}, uncertainty sampling in a total and an epistemic form \citep{griffiths2019heteroscedastic}, Thompson sampling, maximum entropy sampling \citep{sebastiani2000maximum}, and the belief-free systematic and random designs.
+%Maximum entropy sampling is \eqref{eq:eig} with $A(u)$ dropped, and a Poisson entropy grows with its mean, roughly as $\tfrac{1}{2}\log(2\pi e f(u) \lambda)$, so dropping $A(u)$ rewards an action for the noise it collects instead of the uncertainty it removes.
 
 \begin{remark}[What a two-moment surrogate can and cannot see]
     \label{rem:dopt}
@@ -350,7 +316,7 @@ Maximum entropy sampling is \eqref{eq:eig} with $A(u)$ dropped, and a Poisson en
     Numerically $\Delta$ varies little across shapes, so $c$ moves almost entirely through the log-mean-minus-mean-log gap, a dispersion on the log scale the Fano factor cannot see.
 \end{remark}
 
-\subsection{The Policy}
+\subsection{Selecting a design}
 \label{sec:inference_policy}
 
 The criterion \eqref{eq:eig} ranks actions but does not say what to do, because actions differ in what they cost: a budget spent in gravel or telescope time is not one counted in measurements, and criteria compared at equal numbers of measurements would favour whichever asks for the largest sample.
@@ -366,178 +332,184 @@ We evaluate \eqref{eq:policy} over the grid of contexts and exposures, take the 
 Because the belief factorises an observation leaves the other $K - 1$ contexts untouched, so a step costs one update and $|\mathcal{V}|$ scores against the $K |\mathcal{V}|$ a naive implementation would pay.
 The rule is greedy over one step, which nothing above requires; we take it because every criterion in Section~\ref{sec:experiments} is greedy in the same way.
 
+\section{Properties}
+\label{sec:properties}
+
+\subsection{Every context is sampled}
+\label{sec:properties_coverage}
+
+\begin{proposition} 
+    \label{prop:starvation}
+    Let $f(u) > 0$ and $c(u) > 0$ for every design $u \in \mathcal{U}$. For a GIG prior distribution over each context $k$, with $a_k, b_k > 0$ and $\nu_k \in \mathbb{R}$, the policy \eqref{eq:policy} visits every context infinitely often as $t \rightarrow \infty$.
+\end{proposition}
+
+The proof is in Appendix~\ref{appx:starvation}.
+It rests on the bound $G(u) < 2 f(u) / b_{k,t}$ for $u \in \mathcal{U}_k$, with $b_{k,t} = b_k + 2 F_{k,t}$ the second scale parameter of context $k$ after $t$ steps.
+Each selection raises $b_{k,t}$, so the scores of a context that keeps being selected vanish, while those of a context left alone stay fixed and positive.
+The argument needs only a score that depends on the belief at the context of $u$ alone and lies in $(0, f(u) V / \mu]$, so it covers local D-optimality as well.
+It does not extend to maximum entropy sampling, whose score at a well-measured context tends to a Poisson entropy rather than to zero.
+
+\subsection{Regret bound comparison}
+\label{sec:properties_regret}
+
+Write $d(x, \lambda) = x \log(x / \lambda) - x + \lambda$ for the relative entropy of a Poisson law of mean $x$ from one of mean $\lambda$, and
+%
+\begin{equation}
+    \delta_k(x) = \nu_k + \frac{a_k}{2x} - \frac{b_k x}{2}
+    \label{eq:prior_counts}
+\end{equation}
+%
+for what the prior of context $k$ is worth in counts at rate $x$.
+The posterior mean of context $k$ exceeds $x$ whenever $T_{k,t} + \delta_k(x) \geq x F_{k,t}$, where $T_{k,t}$ is the count accumulated at context $k$ (Lemma~\ref{lem:mean_bounds}).
+
+\begin{proposition}[Simple regret]
+    \label{prop:regret}
+    Let each context carry an independent prior \eqref{eq:gig} with $a_k, b_k > 0$, let the counts follow \eqref{eq:likelihood} at true rates $\lambda^{*}_k > 0$, and let $S_t$ in \eqref{eq:regret} hold the $m$ contexts of largest posterior mean $\mu_{k,t}$.
+    Let a design choose each $u_{s+1}$ from the past, possibly with independent randomisation, and stop at a bounded stopping time $t$ with $F_{k,t} \geq \phi_k$ for every $k$ on every sample path.
+    Then for every $i \in S^{*}$, $j \notin S^{*}$ and $x \in (\lambda^{*}_j, \lambda^{*}_i)$,
+    %
+    \begin{equation}
+        \begin{split}
+            \Pr(\mu_{j,t} \geq \mu_{i,t}) \leq{} & \Big( \frac{x}{\lambda^{*}_i} \Big)^{\delta_i(x)} \exp\big( -\phi_i \, d(x, \lambda^{*}_i) \big) \\
+            & + \Big( \frac{x}{\lambda^{*}_j} \Big)^{\delta_j(x) + \epsilon_j} \exp\big( -\phi_j \, d(x, \lambda^{*}_j) \big) \,,
+        \end{split}
+        \label{eq:misranking}
+    \end{equation}
+    %
+    with $\epsilon_j = \max(\tfrac{1}{2}, -\nu_j)$.
+    With $\Lambda^{*} = \sum_{k \in S^{*}} \lambda^{*}_k$ the regret satisfies
+    %
+    \begin{equation}
+        \mathbb{E}[R_t] \leq \frac{1}{\Lambda^{*}} \sum_{i \in S^{*}} \sum_{j \notin S^{*}} (\lambda^{*}_i - \lambda^{*}_j) \Pr(\mu_{j,t} \geq \mu_{i,t}) \,.
+        \label{eq:regret_bound}
+    \end{equation}
+\end{proposition}
+
+\begin{corollary}[Gamma-Poisson]
+    \label{cor:regret_gamma}
+    Under gamma priors of shape $\nu_k > 0$ and rate $b_k / 2$, the limit $a_k \to 0$ of \eqref{eq:gig}, Proposition~\ref{prop:regret} holds with $a_k = 0$ in \eqref{eq:prior_counts} and $\epsilon_j = 0$.
+\end{corollary}
+
+The proofs are in Appendix~\ref{appx:regret}.
+The bound follows each count through an exponential martingale, so it holds for adaptive designs but needs the exposures guaranteed on every path.
+A design fixed in advance has them, whereas Proposition~\ref{prop:starvation} makes every exposure of the rule \eqref{eq:policy} diverge but gives no explicit floor at a finite budget.
+The exponents depend on the true rates and the exposures alone.
+For equal exposures the best $x$ balances them at the logarithmic mean $(\lambda^{*}_i - \lambda^{*}_j) / \log(\lambda^{*}_i / \lambda^{*}_j)$, and a grid over $x$ attains the Chernoff exponent of the pair, at most twice as large, at the cost of a prefactor linear in the exposure (Remark~\ref{rem:chernoff}).
+
+At equal exposures the GIG and gamma bounds therefore share their exponents and differ only in their prefactors, by factors that do not depend on the budget.
+Relative to a gamma prior with the same $\nu_k > 0$ and $b_k$, the GIG prior adds $a_k / (2x)$ counts, which raise every posterior mean.
+This shrinks the first term of \eqref{eq:misranking}, for the context that belongs in the top $m$, and inflates the second.
+The shift $\epsilon_j$ comes from bracketing the GIG posterior mean, whose inverse in the count has no closed form, and not from the model.
+
+\subsection{Tail probability comparison}
+
+Write $\bar{F}(y) = p(Y \geq y \given u, \mathcal{D})$ for the predictive tail probability of \eqref{eq:sichel}, and $\bar{F}_{\Gamma}$ for that of the negative binomial obtained from a gamma prior of shape $r$ and rate $\beta$.
+
+\begin{lemma}[Tail of the Sichel law]
+    \label{lem:sichel_tail}
+    Let the belief be $\Gig(\lambda \given \nu, a, b)$ with $a, b > 0$, let $f = f(u) > 0$, and let $q = 2f / (b + 2f)$.
+    \begin{enumerate}
+        \item[(i)] As $y \to \infty$, $\bar{F}(y) = C \, y^{\nu - 1} q^{y} \big(1 + o(1)\big)$, with $C = (2/((b + 2f)\eta))^{\nu} / (2 (1 - q) K_{\nu}(\omega))$. The negative binomial has the same form with exponent $r - 1$ and rate $q_{\Gamma} = f / (\beta + f)$.
+        \item[(ii)] If the gamma prior has the mean and variance of the belief, so that both predictives have the same mean and variance at every exposure, then $q > q_{\Gamma}$. Hence $\bar{F}(y) / \bar{F}_{\Gamma}(y) \to \infty$, at the exponential rate $\log(q / q_{\Gamma})$, and yet $\bar{F}(y) < \bar{F}_{\Gamma}(y)$ for some $y \geq 1$.
+        \item[(iii)] If both beliefs are then updated with the same data, of total exposure $F$, the rates become $q_F = 2f/(b + 2F + 2f)$ and $q_{\Gamma, F} = 2f / (2\beta + 2F + 2f)$, so the counts do not enter the gap at all and
+        \begin{equation*}
+            \log \frac{q_F}{q_{\Gamma, F}} = \log \Big( 1 + \frac{2\beta - b}{b + 2F + 2f} \Big) = O(1/F) \,.
+        \end{equation*}
+    \end{enumerate}
+\end{lemma}
+
+The proof is in Appendix~\ref{appx:sichel_tail}.
+Part (ii) shows that a negative binomial matched to the first two moments underestimates the probability of an extreme count by a factor that grows exponentially in the threshold, and overestimates it at some moderate threshold, so its error changes sign rather than being a bias in one direction.
+The decay rate is set by $b$ alone, the order only sets the polynomial factor, and $a$ only enters the constant.
+When $b$ is small, the asymptotic form takes over only beyond $y \approx 2f/b$, and below that the tail falls like a power law.
+Part (iii) shows that the advantage is largest where little exposure has been spent, and that it is used up by exposure, not by the counts observed.
+
 \section{Experiments}
 \label{sec:experiments}
 
-\subsection{Verification on GIG-Poisson data}
-\label{sec:experiments_verification}
+We perform three experiments. The first, counting diamonds, represents the advantage the GIG-Poisson model has in a correctly specified setting. The second, counting photons, is taken from actual data and is not guaranteed to be correctly specified.
 
-With rates drawn from \eqref{eq:gig} and counts from \eqref{eq:likelihood}, correct specification is arranged and any discrepancy is the implementation's.
-Against $4 \times 10^{5}$ draws, \eqref{eq:sichel} carries a support mass of one to $4 \times 10^{-13}$, the update \eqref{eq:posterior} agrees with numerical Bayes to a total variation of $8 \times 10^{-13}$, and the log-ratio to the negative binomial falls as $\omega^{2}$.
-Remark~\ref{rem:conditioning} is not hypothetical: a direct call to $K_{\nu}$ overflows at the fourth measurement, the order having reached $465.5$, while in log space the Bessel quantities stay accurate to $1.3 \times 10^{-13}$ against $40$-digit references.
+We compare against four baselines, each selecting designs by \eqref{eq:policy} with the same cost normalisation as ours.
+The first replaces \eqref{eq:gig} by its gamma boundary, which makes the predictive negative binomial and keeps expected information gain exact.
+The second is the non-conjugate route: a skew-normal prior on $\log \lambda$, with as many parameters as \eqref{eq:gig}, whose posterior is represented by $2048$ Markov chains taking $30$ Metropolis-Hastings steps after every observation, and whose expected information gain is estimated by nested Monte Carlo with $N = M = 1024$ \citep{rainforth2018nesting}.
+The last two are Bayesian optimisation by expected improvement on a Gaussian process over the log-rates, with a Poisson likelihood and a Laplace approximation to the posterior; one uses a squared-exponential kernel over the prior mean and dispersion of each source, the other a categorical kernel over source class, and both learn their kernel hyperparameters by marginal likelihood.
+Expected improvement scores a source but not a dwell time, so the exposure enters as a fidelity factor, the fraction of the latent variance an observation of that exposure is expected to remove.
+Computational cost is the wall-clock time of selecting a design plus updating the belief, averaged over rounds, with $12$ episodes running concurrently on one machine.
+\claude{Citations to add to the Zotero library: skew-normal distribution (Azzalini, 1985); expected improvement (Jones, Schonlau and Welch, 1998); Laplace approximation for GP classification (Rasmussen and Williams, 2006, Sec.~3.4).}
 
-Over four regimes, prediction error falls as $n^{-1}$ and rate error as $n^{-1/2}$, and rescaling the posterior variance by $F_n / \Ex{}{\lambda^{*}}$ collapses all four onto the constant \eqref{eq:consistency_rate} predicts to within $2$ per cent, despite prior variance-to-mean ratios spanning a factor of $50$; a misspecified gamma-Poisson arm converges at the same rate, paying a constant at the start and within two per cent by the thirty-second observation (Figure~\ref{fig:prediction}, Table~\ref{tab:prediction_slopes}).
-
-\subsection{Allocating a Bulk-Sampling Programme}
-\label{sec:experiments_bulk}
-
-\begin{table}[t]
-    \caption{Bulk sampling at 12 blocks and 240 cubic metres, mean over 48 properties. Superscripts are the paired $t$ against our agent: negative favours ours, $|t| < 2$ is a tie, and a column is bolded only where its leader beats every other at $|t| \geq 2$, which none does here. The upper block varies the acquisition with the model fixed, the lower the mixing law with the acquisition fixed. One point of Figure~\ref{fig:scarcity}, and an abundant one.}
-    \label{tab:bulk}
-    \centering
-    \footnotesize
-    \setlength{\tabcolsep}{2pt}
-    \input{experiments/tables/bulk}
-\end{table}
-
-This is the setting the Sichel law was introduced for: it was the failure of the standard discrete laws on stone counts in clustered diamond deposits that motivated the generalised inverse Gaussian \citep{sichel1975distribution,stein1987parameter}, to value a deposit once samples are in hand rather than to decide which to take.
-A property has $K$ blocks of unknown stone density $\lambda_k$, and an action $(k, v)$ names a block and a volume of gravel from $\{1, 2.5, 5, 10, 20, 40\}$ cubic metres, with exposure $f(u) = v r_k$ through the plant's known recovery factor, which is Assumption~\ref{as:exposure} exactly.
-The budget is gravel rather than samples, so every criterion is scored per cubic metre.
-Each block's stone field is realised once as a Poisson process in processed volume, so two policies that process the same gravel recover the same stones.
-We report a held-out predictive score, the grade error, and the grade forgone by committing to the four best-ranked blocks.
-
-Table~\ref{tab:bulk} reports both comparisons at twelve blocks and $240$ cubic metres, and against every criterion that ignores the aleatoric term the result is decisive.
-Maximum entropy sampling is the worst agent in the study, behind random, touching $2.8$ of $12$ blocks and putting $239$ of $240$ cubic metres into the richest block of a representative property: scoring a sample by how unpredictable its outcome is sends the budget where it teaches least per unit of gravel, which is $A(u)$ going unsubtracted.
-Thompson sampling and both variance criteria fail the same way.
-
-Against the criteria that use the same posterior as carefully the accuracy is a tie and what separates them is cost.
-EPIG \citep{smith2023prediction} and D-optimality are indistinguishable from ours, and none separates on the coarse ranking: with one parameter per context, information about the rate and about the next count rank candidates almost identically.
-Holding the acquisition fixed instead, the third parameter is worth $0.012$ nats against the gamma boundary of its own family and $0.006$ against a lognormal, both measured where our model is correct by construction, so they report what misspecification costs rather than what the parameter is worth.
-Appendix~\ref{appx:grid} shows the two effects do not interact.
-
-\begin{figure}[t]
-    \centering
-    \includegraphics[width=\linewidth]{experiments/bulk-sampling/figures/scarcity}
-    \caption{Predictive score relative to ours as the budget per block varies at fixed total budget, 24 properties a point; an agent on the zero line is indistinguishable from ours. The systematic programme sits on it while the budget is ample and leaves it once the budget cannot cover the blocks.}
-    \label{fig:scarcity}
-\end{figure}
-
-Twelve blocks sharing $240$ cubic metres leaves every block well sampled whatever the schedule does, so Figure~\ref{fig:scarcity} holds the budget fixed and varies the number of blocks it must cover.
-The systematic programme is indistinguishable from ours while the budget is ample, at $-0.002$ nats with forty cubic metres per block, and falls to $-0.169$ at $-8$ standard errors with five.
-The transition is sharp and sits between ten and five cubic metres per block; the choice of mixing law behaves the same way an order of magnitude smaller, the gamma falling from $-0.004$ nats to between $-0.015$ and $-0.021$.
-An adaptive schedule is suited when the budget is scarce.
-
-\subsection{Scheduling a Gamma-Ray Observation}
-\label{sec:experiments_photon}
-
-\begin{table}[t]
-    \caption{Gamma-ray scheduling at the full budget, mean over 24 programmes; conventions as in Table~\ref{tab:bulk}. The upper block varies the acquisition, the lower the mixing law. The two variance criteria return identical schedules here, for the reason given in the text.}
-    \label{tab:photon}
-    \centering
-    \footnotesize
-    \setlength{\tabcolsep}{2pt}
-    \input{experiments/tables/photon}
-\end{table}
-
-Every rate in the previous section is drawn from the law of Section~\ref{sec:model_prior}, so a model assuming it is correct by construction.
-Here the rates are measured photon fluxes from the Fermi Large Area Telescope fourth source catalogue \citep{abdollahi2020fermi}, so Section~\ref{sec:model} is the measurement process rather than an analogy: the expected count is the flux times the effective area times the time on target, so $f(u) = A_{\text{eff}} t$ and the budget is spent in megaseconds.
-Priors are conditioned on source class, which an observer knows before pointing and which matters, pulsars having a median flux twelve times that of blazar candidates and a variance-to-mean ratio twelve hundred times larger.
-The catalogue is split within each class, priors fitted to one half and sources drawn from the other.
-
-Forty-eight targets share $120$ megaseconds, so most cannot be observed at all.
-Under the same acquisition the gamma mixing law is $0.049$ nats behind ours at $-7.4$ standard errors, $0.014$ dex behind on the flux estimate and behind on the scheduling decision as well, the first setting here where the choice of model reaches the decision.
-The lognormal ties us within a standard error at nine times the cost, so what the third parameter does not buy against that alternative the conjugacy buys instead.
-The acquisition separates in the same regime, a systematic schedule falling $0.41$ nats behind at $-18.7$ standard errors and maximum entropy sampling $0.77$, while EPIG and D-optimality remain indistinguishable from ours.
-
-The two variance criteria return the same schedule on every programme, which they do not in Section~\ref{sec:experiments_bulk}: the effective area is large and the fluxes heavily overdispersed, so the epistemic part of the predictive variance outweighs the aleatoric by two to four orders of magnitude and the rankings coincide, a fact about this problem rather than about the criteria.
-
-\subsection{When Does the Exact Criterion Pay?}
-\label{sec:experiments_shape}
-
-\begin{table}[t]
-    \caption{Contexts of differing prior shape, low-count regime, budget $8$ or $0.67$ per context, mean over $80$ episodes; conventions as in Table~\ref{tab:bulk}. The fifth column is the share of budget given to the heavy-shape class, a mechanism rather than a score. Every agent carries the same belief, so the acquisition is all that varies. One point of Figure~\ref{fig:shape_scarcity}.}
-    \label{tab:shape_scarcity}
-    \centering
-    \footnotesize
-    \setlength{\tabcolsep}{2pt}
-    \input{experiments/tables/shape_scarcity}
-\end{table}
-
-\begin{figure*}[t]
-    \centering
-    \includegraphics[width=\linewidth]{experiments/synthetic/shape-scarcity/figures/shape_scarcity}
-    \caption{Twelve contexts in two classes differing in prior shape, $80$ episodes a point. (a) Rate error D-optimality incurs over ours, so above zero is our gain; bands are two standard errors of the paired difference. The gain is about four times larger at low counts than at high and is gone by roughly $1.3$ units of exposure per context. (b) The mechanism: D-optimality sends the whole budget to the heavy-shape class, whose dispersion is larger but mostly unresolvable, and ours none until the mild contexts are exhausted.}
-    \label{fig:shape_scarcity}
+\begin{figure*}[thb]
+	\centering
+	\includegraphics[width=.32\textwidth]{figures/bulk_nlpd_box}
+	\includegraphics[width=.32\textwidth]{figures/gamma_nlpd_box}
+	\includegraphics[width=.32\textwidth]{figures/hardx_nlpd_box}
+	\caption{}
+	\label{}
 \end{figure*}
 
-Remark~\ref{rem:dopt} says the two criteria must agree wherever contexts share a prior shape, which is how both studies above are arranged; this section varies it.
+\subsection{Counting diamonds} \label{eq:exp_diamonds}
+This experiment follows the set up initially described by \citet{sichel1973statistical}, namely bulk sampling of diamonds in marine deposits. Consider land property divided into $K =12 $ blocks. Each block carries an unknown density of diamonds. A design corresponds to a choice of block and the volume of soil to sample expressed in cubic metres. The data is generated according to a GIG-Poisson model and serves as a verification experiment. Given $a_k = $, $b_k = $, a $\lambda_k$ is drawn from the GIG distribution. The exposure function $f(u) = \tau*r_k$ is the sample volume times a randomly sampled recovery rate $r_k \sim \mathcal{U}(0.55, 0.98)$. Diamond counts are then sampled from the Poisson distribution with the sampled rate block times the exposure function for each block. The experimental budget is $240 m^3$. 
 
-Twelve contexts fall in two classes of six, sharing a prior mean and differing in the order of the mixing law, $-2$ against $-0.5$.
-The heavy class is given the \emph{larger} index of dispersion, $1.30$ against $1.00$, so local D-optimality strictly prefers it while \eqref{eq:eig} strictly prefers the mild class: confident and opposite preferences, neither ever breaking a tie, which a gate verifies before the sweep runs.
-That direction is the interesting one, because a large index of dispersion under a heavy-tailed mixing law is mostly unresolvable, coming from a small probability of a very large rate that no exposure recovers, and D-optimality reads that variance as something to be learned.
-Rates are drawn from each class's own law and every criterion carries the same belief, so the acquisition is all that varies.
+Figure \ref{fig:} reports the results. 
+%\begin{figure}
+%	\includegraphics[width=\linewidth]{}
+%\end{figure}
 
-Figure~\ref{fig:shape_scarcity} sweeps the budget at a low and a high count level and Table~\ref{tab:shape_scarcity} reports one point of it.
-While the budget is scarce our criterion is ahead on the rate estimate, by $0.041$ dex at $-13.3$ standard errors at the scarcest point and $0.019$ at $-5.7$ with $0.67$ units of exposure per context, D-optimality putting the whole budget into the heavy class and ours none of it.
-Lowering the counts roughly quadruples the gain at fixed budget, from $-3.2$ standard errors to $-13.3$, which is where the approximation behind \eqref{eq:dopt_limit} is weakest.
+\subsection{Counting photons} \label{sec:exp_photons}
+This experiment allocates telescope time across gamma-ray sources, and its rates are measured rather than simulated.
+They are the integral photon fluxes above $1$ GeV of the sources in the Fermi-LAT fourth source catalogue \citep{abdollahi2020fermi}, restricted to the $1$st to $99$th percentile of flux: the faint end lies at the detection threshold, where the catalogue is incomplete, and a handful of very bright sources would otherwise absorb any budget.
+A design $u = (k, \tau)$ points the telescope at source $k$ for a dwell time $\tau \in \{0.5, 1, 2.5, 5, 10, 25\}$ Ms, with exposure $f(u) = A \tau$ and $A = 8000$ cm$^2$, the order of the effective area of the Large Area Telescope above $1$ GeV.
+Photon counts are Poisson with rate $f(u) \lambda^{*}_k$, so \eqref{eq:likelihood} is the measurement process itself, but no model in the comparison generated the rates.
 
-Three things qualify this.
-The separation is on the rate estimate, not the held-out predictive, where D-optimality stays within two standard errors of us everywhere: \eqref{eq:eig} scores information about the rate, and the rate is what it moves.
-EPIG matches us throughout, so what pays is the exact predictive rather than this functional, and both need the conjugacy of Section~\ref{sec:inference}.
-And past about $1.3$ units per context the sign turns, D-optimality leading by $4.4$ standard errors at $2.67$: our greedy rule reinvests where the score is still high and has touched $74$ per cent of contexts there against D-optimality's hundred, so the concentration that wins under scarcity becomes under-coverage once the budget could reach everything, which is what a policy not ensuring the condition of Proposition~\ref{prop:consistency} costs.
+Priors are conditioned on source class, since an observer knows what kind of object a target is before pointing at it.
+The catalogue is split in half within each of five classes: pulsars, flat-spectrum radio quasars, BL Lacertae objects, blazars of uncertain type, and unassociated sources, the last also holding the rarer classes.
+Every model fits its prior to one half by maximum likelihood in its own parameters, and the sources of an episode are drawn from the other half, so a model knows the population of a class but nothing about the source in front of it.
+The fitted GIG order is negative in four of the five classes, between $-0.8$ and $-2.6$, where no gamma distribution can follow.
+An episode draws $K = 192$ sources, cycling over the classes, which share a budget of $120$ Ms, enough to observe only part of the list well.
+The average surprisal is computed on $24$ held-out counts per source at a dwell time of $25$ Ms, the counts a deep follow-up observation would record, and simple regret for $m = 1, \dots, 5$ at $15$, $30$, $60$, $90$ and $120$ Ms.
+Photons are shared exactly between methods: the photons of a source form one realised Poisson process in exposure and an observation consumes the next $f(u)$ of it, so two methods that spend the same time on the same source record the same counts.
+The experiment is repeated for $50$ episodes.
 
-\subsection{Which mixing law to use when?}
-\label{sec:experiments_fields}
+Figures~\ref{fig:photon_nlpd}, \ref{fig:photon_regret} and \ref{fig:photon_cost} report the results.
+The GIG-Poisson model reaches an average surprisal of $5.367$ nats against $5.512$ for the gamma-Poisson model, a difference of $0.146$ nats that holds in every one of the $50$ episodes (paired $t = 26.8$).
+The log-skew-normal model is indistinguishable from ours on surprisal ($5.365$ nats, $t = 0.7$) but costs an order of magnitude more per round, nearly all of it in the nested estimate.
+\claude{Per-round times in the result files come from separate invocations under different machine load (485 and 1092 ms for the same log-skew-normal agent); quote times from the dedicated timing run once it exists.}
+Bayesian optimisation is worst on surprisal, at $5.68$ and $5.69$ nats for the two kernels, because expected improvement concentrates the budget on the brightest candidates: it observes $60$ per cent of the sources against $85$ per cent for our method.
+The same concentration gives it the lowest top-$1$ regret, $0.001$ against $0.014$ for ours, and the highest top-$4$ and top-$5$ regret, $0.023$ and $0.027$ against $0.008$ and $0.009$.
+The three methods that select by expected information gain do not differ in top-$m$ regret for any $m$ ($|t| \leq 1.9$).
+The margin over the gamma-Poisson model grows with the number of sources the budget must cover and with the dwell time at which predictions are scored, as fewer sources are measured well enough for the data to override the prior: with $K = 48$ sources scored at $5$ Ms it is $0.064$ nats.
 
-\begin{figure*}[!t]
-    \centering
-    \includegraphics[width=\linewidth]{experiments/rate-fields/figures/rate_fields}
-    \caption{Three measured fields of rates against the maximum-likelihood fit of each mixing law. The gamma occupies the edge of the family at positive order, so a field fitted negative is one no gamma can reach however its two parameters are set; on the third the fitted order is positive and the two coincide.}
-    \label{fig:rate_fields}
-\end{figure*}
+\subsection{Counting hard X-ray photons} \label{sec:exp_xray}
+This experiment schedules hard X-ray follow-up of sources detected by the Burst Alert Telescope (BAT) on the Swift satellite, a different sky, instrument and population from the previous one.
+The rates are the $14$ to $195$ keV fluxes of the $1632$ sources of the Swift-BAT 105-month all-sky survey, most of them active galactic nuclei, again restricted to the $1$st to $99$th percentile of flux.
+A design $u = (k, \tau)$ points a focusing hard X-ray telescope at source $k$ for $\tau \in \{0.5, 1, 2.5, 5, 10, 25\}$ ks, with exposure $f(u) = C \tau$.
+The constant $C = 3.1$ converts a catalogue flux in units of $10^{-12}$ erg cm$^{-2}$ s$^{-1}$ into detected counts per kilosecond, and corresponds to the band above $20$ keV of a telescope like NuSTAR: for a power law of photon index $1.8$, about $16$ per cent of the $3$ to $79$ keV photons arrive above $20$ keV, where the effective area is roughly half its peak, so about a tenth of the $31$ counts per kilosecond such a telescope records over its full band.
+A snapshot of $0.5$ ks of a median source then records about $22$ counts, ten times as many as in the gamma-ray experiment.
+Each observation is therefore far more informative, which moves the problem away from the one before in two ways: the prior is overridden sooner, and the likelihood of a single observation is much narrower than the prior.
 
-\begin{table}[t]
-    \caption{Three measured rate fields. $\Delta$AIC is against the best law for that field, so zero marks the winner; the order is the generalised inverse Gaussian's, the only law with a free one. The last column is the third parameter's advantage over the gamma per observation, which is what compares across fields of different size.}
-    \label{tab:rate_fields}
-    \centering
-    \footnotesize
-    \setlength{\tabcolsep}{3pt}
-    \input{experiments/tables/rate_fields}
-\end{table}
+Priors are again conditioned on source class, split in half within each of six classes: Seyfert~1 galaxies (types 1 to 1.5), Seyfert~2 galaxies (types 1.8 to 2), beamed active galactic nuclei, X-ray binaries, cataclysmic variables, and the unidentified sources together with the rarer classes.
+The fitted GIG order is negative in all six, between $-0.6$ and $-3.5$.
+This is expected of a flux-limited survey of sources distributed through space, whose number counts follow a power law in flux: a GIG of negative order has a power-law tail, which a gamma distribution cannot have.
+An episode draws $K = 192$ sources sharing a budget of $120$ ks, the average surprisal is computed on $24$ held-out counts per source at $20$ ks, simple regret for $m = 1, \dots, 5$ at $15$, $30$, $60$, $90$ and $120$ ks, and photons are shared between methods as before.
+The experiment is repeated for $50$ episodes.
 
-The comparisons above either generate their rates from \eqref{eq:gig} or argue from a single field.
-This section asks three measured fields at once and lets them disagree: the photon fluxes of Section~\ref{sec:experiments_photon}, the count rates of $1107$ five-hundred-metre cells around Fukushima Daiichi recorded by the Safecast project \citep{brown2016safecast}, and, as a deliberate outsider, 
-Each law is fitted by maximum likelihood with the location at zero and scored by AIC, so the third parameter pays for itself; no acquisition, budget or policy enters.
-
-On the two physical fields the third parameter is decisive, by $1773$ and $568$ points of AIC against the gamma; on the linguistic field it is worth $7$ points on $22460$ observations, or $0.0003$ each.
-The fitted order says why.
-A gamma is the boundary of the family at $\omega \to 0$ with positive order, so a field fitted at $-1.43$ or $-2.07$ is one no gamma can reach however its two parameters are set, while one fitted at $+1.73$ merely sits inside the gamma's range, which is necessary for the gamma to suffice and not sufficient.
-The question can therefore be settled from the rates alone, at the cost of one fit.
-The ordering of the two-parameter laws is not stable: the lognormal beats the gamma on both physical fields and loses on the linguistic one.
-
-Three features of the data qualify this.
-The Fermi fluxes come from a flux-limited catalogue, so the field is the detected population rather than the intrinsic one.
-A Safecast cell's rate is a mean over vehicle passes spread across years of decay and neighbouring cells are not independent, so the effective sample size is below $1107$.
-The Newsgroups field excludes terms absent from every group, removing the rare bursty terms where a heavy tail would show most, which works against the null result rather than for it.
+Figures~\ref{fig:xray_nlpd}, \ref{fig:xray_regret} and \ref{fig:xray_cost} report the results.
+The GIG-Poisson model leads the gamma-Poisson model by $0.353$ nats at $15$ ks, while most sources are still unobserved, and by $0.061$ nats at $120$ ks, when every source has been observed ($6.663$ against $6.724$ nats, paired $t = 15.2$), and it is ahead in all $50$ episodes at both budgets.
+The log-skew-normal model matches ours at every budget ($6.666$ nats at $120$ ks, $t = 0.8$), although its nested estimate of the information gain is badly biased in this regime: when an observation carries tens of counts, few inner samples fall where the observed count is likely, and at a dwell time of $25$ ks the estimate is $17.1$ nats against an exact $3.1$.
+Even so, its predictions do not suffer measurably, and neither do those of the same model with an inner sample eight times larger or with the information gain computed exactly by quadrature.
+Bayesian optimisation observes $17$ per cent of the sources and stops improving after $30$ ks, ending at $7.89$ and $7.90$ nats with top-$5$ regret $0.020$ against $0.0003$ for ours.
+The three methods that select by expected information gain reach near-zero top-$m$ regret by $60$ ks and do not differ from each other.
+The exact information gain is not cheap in this regime: its predictive sum runs over a support that grows with the expected count, and it costs about twice as much per round as the nested estimate, whose cost does not depend on the counts.
+\claude{The per-round times (about 1.5 s for GIG-Poisson, 0.75 s for log-skew-normal, 6 ms for gamma-Poisson) are from one invocation with 12 episodes running concurrently; replace with the dedicated timing run.}
 
 \section{Discussion}
 \label{sec:discussion}
 
-Assumption~\ref{as:exposure} keeps the family closed under observation but excludes an additive term: a real gamma-ray observation counts source photons together with a known diffuse background, so the rate is $f(u)\lambda + b$, the mixture is no longer conjugate and the predictive no longer Sichel.
-That is the most concrete boundary of the framework we have found.
 
-EPIG \citep{smith2023prediction} and local D-optimality \citep{chaloner1995bayesian} matched ours on accuracy in both allocation studies, at $0.52$, $8.9$ and $75$ milliseconds per decision.
-Remark~\ref{rem:dopt} says why the second ties, and it is not a fact about those problems: D-optimality is the leading term of our own criterion, so contexts whose priors share a shape are ranked identically by both, and both studies are arranged that way.
-Section~\ref{sec:experiments_shape} separates them where the theory says it should, though narrowly, and EPIG separates from us nowhere, which places the value in the exact predictive rather than in the choice of functional.
-Conjugacy buys an exact predictive, an acquisition free of Monte-Carlo error and a decision no two-moment surrogate reaches in one identified regime; it does not buy the cheapest rule.
-
-Against every criterion that ignores the aleatoric term the margin is wide: maximum entropy sampling \citep{sebastiani2000maximum} was the worst policy in both studies, behind uniform random sampling, and the failure reproduces under every mixing law we tried, so it belongs to the criterion and not to our family.
-
-Once the budget is large enough that every context ends up well measured, no rule distinguishes itself from visiting each in turn, and the transition is sharp, so a study reporting one budget reports one point on that curve.
-Past it ours is slightly behind D-optimality: Proposition~\ref{prop:consistency} needs accumulated exposure to diverge at every context and Section~\ref{sec:inference_policy} does not ensure it, the one place here where the theory and the policy come apart.
-A coverage floor would close it and we have not tested one.
-
-The two allocation studies are simulators whose structure is taken from their domains rather than field trials; only the rate fields of Section~\ref{sec:experiments_fields} are measured.
-Contexts are independent, so a spatial problem in which neighbouring cells inform each other would break the factorisation.
-The rate of a context is fixed and unknown, so a process in which it is redrawn at every observation is a different model.
-\claude{That last point is unresolved and load-bearing: it decides what the right baselines are. See the memory note \texttt{overdispersion-has-two-readings}.}
 
 \section{Conclusion}
 \label{sec:conclusion}
 
-Counting experiments with a controllable exposure admit a conjugate model richer than the gamma-Poisson pair: mixing a Poisson rate over a generalised inverse Gaussian keeps the posterior in the family and makes the predictive exact, so expected information gain becomes two deterministic quadratures rather than a nested estimate, and the posterior concentrates if the design lets accumulated exposure diverge.
-The resulting rule beats every criterion that ignores the aleatoric term once the budget cannot cover the contexts, and is the leading-order equal of the closest two-moment surrogate except under differing prior shape, a scarce budget and low counts.
-Whether the third parameter earns its cost is a question about the field, answered from the rates beforehand.
+
 
 \subsection*{AI use statement}
 
@@ -615,19 +587,11 @@ Let $\mathcal{F}_{t}$ be the filtration generated by $(u_1, y_1, \dots, u_t, y_t
 Write $f_i = f(u_i)$, and
 %
 \begin{equation*}
-    T_t = \sum_{i \leq t} y_i \,, \qquad F_t = \sum_{i \leq t} f_i \,, \qquad \nu_t = \alpha + T_t \,, \qquad b_t = b + 2 F_t \,,
+    T_t = \sum_{i \leq t} y_i \,, \qquad F_t = \sum_{i \leq t} f_i \,, \qquad \nu_t = \nu + T_t \,, \qquad b_t = b + 2 F_t \,,
 \end{equation*}
 %
-so that by Corollary~\ref{cor:sufficient} the posterior is $\Gig(\lambda \given \nu_t, a, b_t)$, with scale $\eta_t = \sqrt{a/b_t}$ and concentration $\omega_t = \sqrt{a b_t}$.
-Two identities are used repeatedly, both immediate: $\eta_t / \omega_t = 1/b_t$ and $\eta_t \omega_t = a$.
-The moments of the generalised inverse Gaussian are
-%
-\begin{equation}
-    \Ex{}{\lambda^{n}} = \eta_t^{n} \frac{K_{\nu_t + n}(\omega_t)}{K_{\nu_t}(\omega_t)} \,,
-    \label{eq:gig_moments_appx}
-\end{equation}
-%
-so everything below is a statement about the ratio $R_{\nu}(z) = K_{\nu + 1}(z) / K_{\nu}(z)$.
+so that the posterior is $\Gig(\lambda \given \nu_t, a, b_t)$ by repeated use of \eqref{eq:posterior}.
+A subscript $t$ marks the quantities of Lemma~\ref{lem:gig_moments} under this posterior, such as $\eta_t$, $\omega_t$, $\mu_t$ and $V_t$, so everything below is a statement about the ratio $R$.
 
 \subsection{A Bracket on the Bessel Ratio}
 
@@ -636,33 +600,32 @@ An exact two-sided bound follows from the recurrence alone, and it is the only p
 
 \begin{lemma}
     \label{lem:bessel_bracket}
-    For every $z > 0$ and every real $\nu$,
+    For every $z > 0$ and every real $\alpha$,
     %
     \begin{equation}
-        R_{\nu}(z) > \frac{2\nu}{z} \,,
+        R_{\alpha}(z) > \frac{2\alpha}{z} \,,
         \label{eq:bracket_lower}
     \end{equation}
     %
-    and if in addition $\nu > 1$,
+    and if in addition $\alpha > 1$,
     %
     \begin{equation}
-        R_{\nu}(z) < \frac{2\nu}{z} + \frac{z}{2(\nu - 1)} \,.
+        R_{\alpha}(z) < \frac{2\alpha}{z} + \frac{z}{2(\alpha - 1)} \,.
         \label{eq:bracket_upper}
     \end{equation}
 \end{lemma}
 
 \begin{proof}
-    The modified Bessel function of the second kind is strictly positive on $(0, \infty)$ for every real order, and satisfies $K_{\nu + 1}(z) = K_{\nu - 1}(z) + (2 \nu / z) K_{\nu}(z)$.
-    Dividing by $K_{\nu}(z)$ gives the exact recursion
+    By Eqs.~(A.15) and (A.16) of \citet{jorgensen1982statistical}, the ratio satisfies the exact recursion
     %
     \begin{equation}
-        R_{\nu}(z) = \frac{2\nu}{z} + \frac{1}{R_{\nu - 1}(z)} \,,
+        R_{\alpha}(z) = \frac{2\alpha}{z} + \frac{1}{R_{\alpha - 1}(z)} \,,
         \label{eq:ratio_recursion}
     \end{equation}
     %
-    valid for every real $\nu$.
-    Positivity of $K$ makes $R_{\nu - 1}(z) > 0$, so the second term of \eqref{eq:ratio_recursion} is strictly positive and \eqref{eq:bracket_lower} follows.
-    Applying \eqref{eq:bracket_lower} at order $\nu - 1$, which is a positive lower bound exactly when $\nu > 1$, gives $R_{\nu - 1}(z) > 2(\nu - 1)/z$ and hence $1/R_{\nu - 1}(z) < z / 2(\nu - 1)$.
+    valid for every real $\alpha$.
+    As $K_{\alpha}$ is strictly positive on $(0, \infty)$ for every real order, $R_{\alpha - 1}(z) > 0$, so the second term of \eqref{eq:ratio_recursion} is strictly positive and \eqref{eq:bracket_lower} follows.
+    Applying \eqref{eq:bracket_lower} at order $\alpha - 1$, which is a positive lower bound exactly when $\alpha > 1$, gives $R_{\alpha - 1}(z) > 2(\alpha - 1)/z$ and hence $1/R_{\alpha - 1}(z) < z / 2(\alpha - 1)$.
     Substituting into \eqref{eq:ratio_recursion} gives \eqref{eq:bracket_upper}.
 \end{proof}
 
@@ -682,7 +645,7 @@ An exact two-sided bound follows from the recurrence alone, and it is the only p
     \end{equation*}
     %
     On $\{F_t \to \infty\}$ we have $\langle M \rangle_{\infty} = \infty$, so the strong law for square-integrable martingales gives $M_t / \langle M \rangle_t \to 0$ almost surely, that is $T_t / F_t \to \lambda^{*}$.
-    Since $\lambda^{*} > 0$ and $F_t \to \infty$, also $T_t \to \infty$ and therefore $\nu_t = \alpha + T_t \to \infty$.
+    Since $\lambda^{*} > 0$ and $F_t \to \infty$, also $T_t \to \infty$ and therefore $\nu_t = \nu + T_t \to \infty$.
 \end{proof}
 
 The adaptivity of the policy is handled entirely by this lemma, and it is the only place it is needed.
@@ -694,18 +657,17 @@ Nothing later distinguishes a sequential design from one fixed in advance.
     Work first on $\{F_{\infty} = \infty\}$, intersected with the almost sure event of Lemma~\ref{lem:lln}, on which $\nu_t \to \infty$ and so $\nu_t > 1$ for all large $t$.
 
     \paragraph{The posterior mean.}
-    Apply \eqref{eq:gig_moments_appx} at $n = 1$ and Lemma~\ref{lem:bessel_bracket} at $\nu = \nu_t$, $z = \omega_t$.
-    Using $\eta_t / \omega_t = 1/b_t$ and $\eta_t \omega_t = a$ to simplify each side,
+    Applying Lemma~\ref{lem:bessel_bracket} at $\alpha = \nu_t$ and $z = \omega_t$ to $\mu_t = \eta_t R_{\nu_t}(\omega_t)$, and simplifying with the identities of Lemma~\ref{lem:gig_moments},
     %
     \begin{equation}
-        \frac{2 \nu_t}{b_t} \; < \; \Ex{p(\lambda \given \mathcal{D}_t)}{\lambda} \; < \; \frac{2 \nu_t}{b_t} + \frac{a}{2 (\nu_t - 1)} \,.
+        \frac{2 \nu_t}{b_t} \; < \; \mu_t \; < \; \frac{2 \nu_t}{b_t} + \frac{a}{2 (\nu_t - 1)} \,.
         \label{eq:mean_bracket}
     \end{equation}
     %
     The width of the bracket is $a / 2(\nu_t - 1) \to 0$, and the leading term satisfies
     %
     \begin{equation}
-        \frac{2 \nu_t}{b_t} = \frac{2 F_t}{b + 2 F_t} \cdot \frac{\alpha + T_t}{F_t} \longrightarrow 1 \cdot \lambda^{*}
+        \frac{2 \nu_t}{b_t} = \frac{2 F_t}{b + 2 F_t} \cdot \frac{\nu + T_t}{F_t} \longrightarrow 1 \cdot \lambda^{*}
         \label{eq:mean_limit}
     \end{equation}
     %
@@ -714,7 +676,7 @@ Nothing later distinguishes a sequential design from one fixed in advance.
     Note that the first scale parameter $a$ appears nowhere except in the width of \eqref{eq:mean_bracket}, which is the formal content of the observation that $a$ is never revised and never needs to be.
 
     \paragraph{The posterior variance.}
-    By \eqref{eq:gig_moments_appx}, $\Var{}{\lambda} = \eta_t^{2} R_{\nu_t}(R_{\nu_t + 1} - R_{\nu_t})$, with the argument $\omega_t$ suppressed.
+    By \eqref{eq:gig_moments}, $V_t = \eta_t^{2} R_{\nu_t}(R_{\nu_t + 1} - R_{\nu_t})$, with the argument $\omega_t$ suppressed.
     Applying \eqref{eq:ratio_recursion} at orders $\nu_t + 1$ and $\nu_t$ and discarding the negative term $-1/R_{\nu_t - 1}$,
     %
     \begin{equation*}
@@ -725,7 +687,7 @@ Nothing later distinguishes a sequential design from one fixed in advance.
     Combining this with \eqref{eq:bracket_upper} for $R_{\nu_t}$ and expanding the product gives
     %
     \begin{equation}
-        \Var{p(\lambda \given \mathcal{D}_t)}{\lambda} \; < \; \frac{4 \nu_t}{b_t^{2}} + \frac{a}{b_t} \Big( 1 + \frac{1}{\nu_t - 1} \Big) + \frac{a^{2}}{4 \nu_t (\nu_t - 1)} \,.
+        V_t \; < \; \frac{4 \nu_t}{b_t^{2}} + \frac{a}{b_t} \Big( 1 + \frac{1}{\nu_t - 1} \Big) + \frac{a^{2}}{4 \nu_t (\nu_t - 1)} \,.
         \label{eq:variance_bound}
     \end{equation}
     %
@@ -733,13 +695,7 @@ Nothing later distinguishes a sequential design from one fixed in advance.
     The posterior variance is therefore $O(1/F_t)$ and vanishes.
 
     \paragraph{Concentration.}
-    The posterior mean-squared error decomposes as
-    %
-    \begin{equation*}
-        \Ex{p(\lambda \given \mathcal{D}_t)}{(\lambda - \lambda^{*})^{2}} = \Var{p(\lambda \given \mathcal{D}_t)}{\lambda} + \Big( \Ex{p(\lambda \given \mathcal{D}_t)}{\lambda} - \lambda^{*} \Big)^{2} \,,
-    \end{equation*}
-    %
-    and both terms vanish almost surely by the two paragraphs above, which is \eqref{eq:consistency}.
+    The posterior mean-squared error decomposes as $\Ex{p(\lambda \given \mathcal{D}_t)}{(\lambda - \lambda^{*})^{2}} = V_t + (\mu_t - \lambda^{*})^{2}$, and both terms vanish almost surely by the two paragraphs above, which is \eqref{eq:consistency}.
     Concentration follows by Chebyshev's inequality, since for any $\epsilon > 0$,
     %
     \begin{equation*}
@@ -750,8 +706,8 @@ Nothing later distinguishes a sequential design from one fixed in advance.
 
     \paragraph{The converse.}
     Work now on $\{F_{\infty} < \infty\}$.
-    Then $\sum_{i} \Pr(y_i > 0 \given \mathcal{F}_{i-1}) = \sum_{i} (1 - e^{-f_i \lambda^{*}}) \leq \lambda^{*} F_{\infty} < \infty$, so by the conditional Borel--Cantelli lemma only finitely many observations are nonzero almost surely.
-    Hence $T_t \to T_{\infty} < \infty$, and the posterior converges to $\Gig(\lambda \given \alpha + T_{\infty}, a, b + 2 F_{\infty})$, which has strictly positive variance because $b + 2F_\infty < \infty$.
+    Then $\sum_{i} \Pr(y_i > 0 \given \mathcal{F}_{i-1}) = \sum_{i} (1 - \exp(-f_i \lambda^{*})) \leq \lambda^{*} F_{\infty} < \infty$, so by the conditional Borel--Cantelli lemma only finitely many observations are nonzero almost surely.
+    Hence $T_t \to T_{\infty} < \infty$, and the posterior converges to $\Gig(\lambda \given \nu + T_{\infty}, a, b + 2 F_{\infty})$, which has strictly positive variance because $b + 2F_\infty < \infty$.
     The posterior does not concentrate, at any $\lambda^{*}$.
 \end{proof}
 
@@ -763,83 +719,199 @@ The looseness is an artefact of bracketing $R_{\nu_t}$ and $R_{\nu_t + 1} - R_{\
 Substituting \eqref{eq:ratio_recursion} into itself once more sharpens \eqref{eq:bracket_upper} to
 %
 \begin{equation}
-    R_{\nu}(z) = \frac{2\nu}{z} + \frac{z}{2(\nu - 1)} + O(z^{3}/\nu^{3}) \,,
+    R_{\alpha}(z) = \frac{2\alpha}{z} + \frac{z}{2(\alpha - 1)} + O(z^{3}/\alpha^{3}) \,,
     \label{eq:ratio_expansion}
 \end{equation}
 %
-uniformly as $\nu / z \to \infty$, which holds here because $\nu_t / \omega_t$ grows like $\lambda^{*} \sqrt{F_t / 2a}$.
-The correction term must be kept at $\nu - 1$ rather than $\nu$, since the two differ by $O(z/\nu^{2})$ and that is larger than $O(z^{3}/\nu^{3})$ in this regime.
-Differencing \eqref{eq:ratio_expansion} at consecutive orders cancels the correction to leading order, because $z/2\nu - z/2(\nu - 1) = -z / 2\nu(\nu - 1)$, and leaves $R_{\nu_t + 1} - R_{\nu_t} = 2/\omega_t + O(\omega_t / \nu_t^{2})$.
+uniformly as $\alpha / z \to \infty$, which holds here because $\nu_t / \omega_t$ grows like $\lambda^{*} \sqrt{F_t / 2a}$.
+The correction term must be kept at $\alpha - 1$ rather than $\alpha$, since the two differ by $O(z/\alpha^{2})$ and that is larger than $O(z^{3}/\alpha^{3})$ in this regime.
+Differencing \eqref{eq:ratio_expansion} at consecutive orders cancels the correction to leading order, because $z/2\alpha - z/2(\alpha - 1) = -z / 2\alpha(\alpha - 1)$, and leaves $R_{\nu_t + 1} - R_{\nu_t} = 2/\omega_t + O(\omega_t / \nu_t^{2})$.
 Hence
 %
 \begin{equation}
-    F_t \Var{p(\lambda \given \mathcal{D}_t)}{\lambda} = \frac{4 \nu_t F_t}{b_t^{2}} \big( 1 + o(1) \big) \longrightarrow \lambda^{*} \,,
+    F_t V_t = \frac{4 \nu_t F_t}{b_t^{2}} \big( 1 + o(1) \big) \longrightarrow \lambda^{*} \,,
     \label{eq:variance_rate}
 \end{equation}
 %
 which is the inverse Fisher information of a Poisson observed at total exposure $F_t$ and proves \eqref{eq:consistency_rate}.
 Simulation agrees.
-Across true rates $\lambda^{*} \in \{0.2, 3, 50\}$, orders $\alpha \in \{-3, -0.5, 2\}$ and a prior mean deliberately set to $1$ in every case, the ratio $F_t \Var{}{\lambda} / \lambda^{*}$ reaches $1.000$ to $1.007$ by $F_t = 10^{5}$.
+Across true rates $\lambda^{*} \in \{0.2, 3, 50\}$, orders $\nu \in \{-3, -0.5, 2\}$ and a prior mean deliberately set to $1$ in every case, the ratio $F_t V_t / \lambda^{*}$ reaches $1.000$ to $1.007$ by $F_t = 10^{5}$.
 
-\section{Figures and Slopes From the Studies}
-\label{appx:figures}
+\section{Proof of Proposition~\ref{prop:starvation}}
+\label{appx:starvation}
 
-The three figures below accompany Sections~\ref{sec:experiments_verification} to \ref{sec:experiments_photon}. Their numbers appear in Tables~\ref{tab:prediction_slopes}, \ref{tab:bulk} and \ref{tab:photon} of the main text.
+\begin{lemma}
+    \label{lem:eig_bound}
+    Under a belief $\Gig(\lambda \given \nu, a, b)$ with $a, b > 0$, $\nu \in \mathbb{R}$, mean $\mu$ and variance $V$, every design with $f(u) > 0$ has
+    %
+    \begin{equation}
+        0 < G(u) \leq f(u) \frac{V}{\mu} < \frac{2 f(u)}{b} \,.
+        \label{eq:eig_bound}
+    \end{equation}
+\end{lemma}
 
-\begin{table}[t]
-    \caption{Fitted log-log slopes over the upper half of the sample-size range, by regime. The generating parameters change the constant and not the exponent. The last column is the worst the misspecified gamma-Poisson arm does against ours over the whole range, which in every regime is at the first observation.}
-    \label{tab:prediction_slopes}
-    \centering
-    \footnotesize
-    \input{experiments/tables/slopes}
-\end{table}
+\begin{proof}
+    For the last inequality, \eqref{eq:gig_moments} gives $V / \mu = \eta (R_{\nu + 1} - R_{\nu})$.
+    Subtracting \eqref{eq:ratio_recursion} at order $\nu$ from the same at order $\nu + 1$ gives $R_{\nu + 1} - R_{\nu} = 2/\omega + 1/R_{\nu} - 1/R_{\nu - 1}$.
+    This is below $2/\omega$, because $R_{\nu} / R_{\nu - 1} = K_{\nu + 1} K_{\nu - 1} / K_{\nu}^{2}$ exceeds $1$ for every real $\nu$ \citep[Theorem~4.1]{jorgensen1982statistical}, so $V / \mu < 2 \eta / \omega = 2 / b$.
 
-%\begin{figure}[t]
-%    \centering
-%    \includegraphics[width=\linewidth]{experiments/experiment-gigpoisson/figures/prediction}
-%    \caption{Prediction error against sample size on data the model specifies exactly, for four regimes of the generating parameters. Shaded bands are two standard errors over $400$ replicate rates. (a) Divergence from the oracle predictive falls as $1/n$. (b) The error in the posterior mean rate falls as $1/\sqrt{n}$. (c) The posterior variance rescaled by $F_n / \Ex{}{\lambda^{*}}$ collapses onto the constant \eqref{eq:consistency_rate} predicts, so the regime sets the constant only through the first few observations.}
-%    \label{fig:prediction}
-%\end{figure}
+    For the middle inequality, let $Q = \mathcal{P}(y \given f(u) \mu)$.
+    Then $D_{\text{KL}}[\mathcal{P}(y \given f(u) \lambda) \,\|\, Q] = f(u) \big( \lambda \log(\lambda / \mu) - \lambda + \mu \big)$, which $\log x \leq x - 1$ bounds by $f(u) (\lambda - \mu)^{2} / \mu$, with expectation $f(u) V / \mu$ under the belief.
+    Write \eqref{eq:eig} as $\Ex{p(\lambda \given \mathcal{D})}{D_{\text{KL}}[\mathcal{P}(y \given f(u) \lambda) \,\|\, p(y \given u, \mathcal{D})]}$, which is the same mutual information.
+    Adding and subtracting $\log Q(y)$ inside the divergence gives
+    %
+    \begin{equation*}
+        G(u) = \Ex{p(\lambda \given \mathcal{D})}{D_{\text{KL}}\big[ \mathcal{P}\big(y \given f(u) \lambda\big) \,\|\, Q \big]} - D_{\text{KL}}\big[ p(y \given u, \mathcal{D}) \,\|\, Q \big] \leq f(u) \frac{V}{\mu} \,,
+    \end{equation*}
+    %
+    since the first term is finite by the bound just given and the second is non-negative.
 
-\begin{figure}[t]
-    \centering
-    \includegraphics[width=\linewidth]{experiments/bulk-sampling/figures/bulk}
-    \caption{Bulk sampling under a processing budget, 48 properties of 12 blocks each. Bands are one standard error. (a) Holding the model fixed and varying the acquisition. (b) Holding the acquisition fixed and varying the mixing law. Note the axis, which spans a fifth of the range in (a). (c) Where the budget went, against what each block was worth. The systematic programme is flat by construction, the informed criteria tilt gently towards blocks with more to learn, and maximum entropy sampling abandons everything but the richest.}
-    \label{fig:bulk}
-\end{figure}
+    For the first inequality, $G(u) = 0$ would make $y$ independent of $\lambda$.
+    It is not, because $p(y = 0 \given \lambda, u) = \exp(-f(u) \lambda)$ is strictly decreasing in $\lambda$ and the belief is not a point mass.
+\end{proof}
 
-\begin{figure}[t]
-    \centering
-    \includegraphics[width=\linewidth]{experiments/gamma-ray/figures/photon}
-    \caption{Scheduling telescope time across 48 gamma-ray targets on a budget of 120 megaseconds, 24 programmes. (a) Held-out predictive score against telescope time spent, with bands at one standard error. (b) Time given to a target against how bright it turned out to be. Maximum entropy sampling spends the budget on the brightest targets and the informed criteria do not. The measured flux field against each fitted mixing law is the first panel of Figure~\ref{fig:rate_fields}.}
-    \label{fig:photon}
-\end{figure}
+\begin{proof}[Proof of Proposition~\ref{prop:starvation}]
+    Let $\bar{r} = \max_{u \in \mathcal{U}} f(u) / c(u)$ and $\underline{f} = \min_{u \in \mathcal{U}} f(u)$, both finite and positive because $\mathcal{U}$ is finite.
+    After $t$ steps context $k$ holds the belief $\Gig(\lambda_k \given \nu_{k,t}, a_k, b_{k,t})$ with $b_{k,t} = b_k + 2 F_{k,t}$, whatever counts it has returned.
+    Write $G_t$ for \eqref{eq:eig} under the beliefs after $t$ steps, so that $u_{t + 1}$ maximises $G_t(u) / c(u)$.
+    Because the beliefs factorise, $G_t(u)$ for $u \in \mathcal{U}_k$ depends on the belief at context $k$ alone.
+    Lemma~\ref{lem:eig_bound} holds at every order, so for every $t$ and every $u \in \mathcal{U}_k$,
+    %
+    \begin{equation}
+        0 < \frac{G_t(u)}{c(u)} < \frac{2 \bar{r}}{b_{k,t}} \,.
+        \label{eq:score_envelope}
+    \end{equation}
 
-\section{The Full Criterion-by-Model Grid}
-\label{appx:grid}
+    Let $A$ be the set of contexts selected infinitely often, which is not empty because one of finitely many contexts is selected at every step.
+    Suppose that some context $j$ is not in $A$.
+    Then there is a step $t_0$ after which no context outside $A$ is selected.
+    The belief at $j$ is therefore the same at every $t \geq t_0$, and so are the scores of $\mathcal{U}_j$, the largest of which, $\iota = \max_{u \in \mathcal{U}_j} G_{t_0}(u) / c(u)$, is positive by \eqref{eq:score_envelope}.
+    Every selection at context $k$ raises $b_{k,t}$ by at least $2 \underline{f}$, so $b_{k,t} \to \infty$ for every $k \in A$.
+    Since $A$ is finite and $b_{k,t}$ is non-decreasing in $t$, there is a $t_1 \geq t_0$ with $2 \bar{r} / b_{k,t} < \iota$ for every $k \in A$ and every $t \geq t_1$.
+    For $t \geq t_1$, \eqref{eq:score_envelope} then puts every design at a context in $A$ below $\iota$, which some design at $j$ attains, so $u_{t + 1}$ is at a context outside $A$.
+    This contradicts the choice of $t_0$, so $A$ contains every context.
+    Each of the infinitely many selections at context $k$ adds at least $\underline{f}$ to $F_{k,t}$, so $F_{k,t} \to \infty$.
 
-Every criterion was run under every mixing law on the same 48 properties, so that the
-acquisition and the model can be varied independently. Table~\ref{tab:grid} reports the
-held-out predictive score of each criterion relative to expected information gain under the
-same model, in nats, so that each column is internally comparable and a row that is constant
-across columns is a criterion whose behaviour does not depend on the model carrying it.
+    The last claim is Proposition~\ref{prop:consistency} at each context.
+    Its proof carries over with $\mathcal{F}_t$ generated by the data of all contexts and with $f_i$ and $y_i$ set to zero at the steps that select another context, since the policy is adapted to this filtration when ties are broken without reference to future counts.
+\end{proof}
 
-\begin{table}[h]
-    \caption{Held-out NLPD relative to expected information gain under the same model, in nats. Positive is worse. Rows are near-constant across columns, which is the point, since the cost of the acquisition does not depend on the mixing law.}
-    \label{tab:grid}
-    \centering
-    \input{experiments/tables/grid}
-\end{table}
+\section{Proof of Lemma~\ref{lem:sichel_tail}}
+\label{appx:sichel_tail}
 
-EPIG is not run under the lognormal mixing law. Its outer expectation requires a posterior
-predictive entropy at every node of a quadrature over the candidate's own predictive, and
-that predictive is itself a quadrature over a grid posterior when the model is not
-conjugate. The nesting costs more than the rest of the study combined, which is a statement
-about non-conjugacy rather than about the criterion, and it is recorded here rather than
-passed over.
+\begin{proof}
+    For (i), fix $z > 0$. The normalising constant of \eqref{eq:gig} gives $K_{\kappa}(z) = \tfrac{1}{2} \int_{0}^{\infty} s^{\kappa - 1} e^{-z(s + 1/s)/2} \, ds$, and substituting $s = 2t/z$,
+    %
+    \begin{equation*}
+        K_{\kappa}(z) = \tfrac{1}{2} \Gamma(\kappa) \Big( \frac{2}{z} \Big)^{\kappa} \, \mathbb{E}\big[ e^{-z^{2} / (4 T_{\kappa})} \big] \,,
+    \end{equation*}
+    %
+    where $T_{\kappa}$ is gamma distributed with shape $\kappa$ and unit rate.
+    As $\kappa \to \infty$, $T_{\kappa} \to \infty$ in probability and the integrand is bounded by $1$, so the expectation tends to $1$ and $K_{\kappa}(z) = \tfrac{1}{2} \Gamma(\kappa) (2/z)^{\kappa} (1 + o(1))$.
+    Applied to \eqref{eq:sichel} at $\kappa = \nu + y$ and $z = \omega_u$, and using $\eta_u / \omega_u = 1/(b + 2f)$, this gives
+    %
+    \begin{equation*}
+        p(y \given u, \mathcal{D}) = \Big( \frac{2 f \eta_u}{\omega_u} \Big)^{y} \frac{\Gamma(\nu + y)}{\Gamma(y + 1)} \Big( \frac{2 \eta_u}{\eta \, \omega_u} \Big)^{\nu} \frac{1 + o(1)}{2 K_{\nu}(\omega)}
+        = (1 - q) \, C \, y^{\nu - 1} q^{y} \big(1 + o(1)\big) \,,
+    \end{equation*}
+    %
+    since $\Gamma(\nu + y) / \Gamma(y + 1) = y^{\nu - 1}(1 + o(1))$.
+    Successive terms of this form have ratio $q (1 + 1/y)^{\nu - 1} \to q < 1$, so summing from $y$ to infinity gives the stated $\bar{F}(y)$.
+    The negative binomial with shape $r$ and success probability $\beta / (\beta + f)$ has mass function $\binom{y + r - 1}{y} (\beta/(\beta + f))^{r} q_{\Gamma}^{y}$, and the same argument applies.
 
-\section{Underperformance for model mis-specification} \label{appx:newsgroup}
+    For (ii), the predictive mean and variance are $f \mu$ and $f \mu + f^{2} V$, so matching them at one exposure matches $\mu$ and $V$, and so matches them at every exposure.
+    A gamma prior with mean $\mu$ and variance $V$ has rate $\beta = \mu / V$.
+    The proof of Lemma~\ref{lem:eig_bound} shows $V / \mu < 2 / b$, which is $b < 2 \beta$, so $q = 2f/(b + 2f) > 2f/(2\beta + 2f) = q_{\Gamma}$.
+    By (i), the ratio $\bar{F}(y) / \bar{F}_{\Gamma}(y)$ equals a positive constant times $y^{\nu - r} (q / q_{\Gamma})^{y} (1 + o(1))$, which diverges.
+    For the crossing, $\bar{F}(0) = \bar{F}_{\Gamma}(0) = 1$ and $\sum_{y \geq 1} \bar{F}(y) = f \mu = \sum_{y \geq 1} \bar{F}_{\Gamma}(y)$, the predictive mean of a count.
+    The difference $\bar{F}(y) - \bar{F}_{\Gamma}(y)$ is therefore positive for all large $y$ and sums to zero over $y \geq 1$, so it is negative for some $y \geq 1$.
 
-We study the relative rates of $1123$ terms across the twenty corpora of 20 Newsgroups.
+    For (iii), \eqref{eq:posterior} gives $b + 2F$ whatever the counts, and the gamma posterior has rate $\beta + F$.
+    Substituting both into the rates of (i) gives the display, and $2\beta - b > 0$ by (ii).
+\end{proof}
+
+\section{Proof of Proposition~\ref{prop:regret}}
+\label{appx:regret}
+
+\begin{lemma}[Pairwise reduction]
+    \label{lem:pairwise}
+    For every realisation, $\Lambda^{*} R_t \leq \sum_{i \in S^{*}} \sum_{j \notin S^{*}} (\lambda^{*}_i - \lambda^{*}_j) \, \mathbb{I}\{\mu_{j,t} \geq \mu_{i,t}\}$.
+\end{lemma}
+
+\begin{proof}
+    The sets $S^{*} \setminus S_t$ and $S_t \setminus S^{*}$ have equal size, so a bijection $\sigma$ matches them, and $\Lambda^{*} R_t = \sum_{i \in S^{*} \setminus S_t} (\lambda^{*}_i - \lambda^{*}_{\sigma(i)})$.
+    Each term is non-negative, because $i \in S^{*}$ and $\sigma(i) \notin S^{*}$, and has $\mu_{\sigma(i),t} \geq \mu_{i,t}$, because $\sigma(i)$ is selected and $i$ is not.
+    So each term appears on the right-hand side, whose other terms are non-negative.
+\end{proof}
+
+\begin{lemma}[Bounds on the posterior mean]
+    \label{lem:mean_bounds}
+    The mean $\mu$ of a belief $\Gig(\lambda \given \nu, a, b)$ with $a, b > 0$ satisfies
+    %
+    \begin{equation}
+        g(\nu) < \mu \leq g(\nu + \epsilon) \,, \qquad g(\alpha) = \frac{\alpha + \sqrt{\alpha^{2} + ab}}{b} \,,
+        \label{eq:mean_bounds}
+    \end{equation}
+    %
+    with $\epsilon = \max(\tfrac{1}{2}, -\nu)$.
+\end{lemma}
+
+\begin{proof}
+    Let $\rho_{\alpha}(z) = (\alpha + \sqrt{\alpha^{2} + z^{2}}) / z$.
+    By Lemma~\ref{lem:gig_moments}, $\mu = \eta R_{\nu}(\omega)$ and $g(\alpha) = \eta \rho_{\alpha}(\omega)$, so both bounds are statements about $R$.
+    For the lower bound, Eq.~(A.17) of \citet{jorgensen1982statistical} gives $R_{\nu} = \nu / \omega + \sqrt{\nu^{2} / \omega^{2} + D_{\nu}}$ with $D_{\nu} = R_{\nu} / R_{\nu - 1}$, and $D_{\nu} > 1$ by his Theorem~4.1, so $R_{\nu}(\omega) > \rho_{\nu}(\omega)$.
+
+    For the upper bound, fix $\alpha > -\tfrac{1}{2}$ and write $c = \alpha + \tfrac{1}{2}$ and $\rho = \rho_{c}$, which is strictly decreasing and exceeds $1$.
+    By Eq.~(A.23) of \citet{jorgensen1982statistical}, $R = R_{\alpha}$ solves $R' = R^{2} - (2c / z) R - 1$, whose right-hand side is positive for $R > \rho$ and negative for $0 < R < \rho$.
+    Suppose that $R(z_1) \geq \rho(z_1)$ for some $z_1$.
+    Wherever $R = \rho$ we have $R' = 0 > \rho'$, so $R > \rho$ on $(z_1, \infty)$, and there $R' > 0$.
+    Then $R(z) > \rho(z_1) > 1$ for all $z > z_1$, which contradicts $R_{\alpha}(z) \to 1$ as $z \to \infty$, his Eq.~(A.21).
+    Hence $R_{\alpha} < \rho_{\alpha + 1/2}$, which is the upper bound for $\nu > -\tfrac{1}{2}$.
+    The same equation gives $R_{\alpha} > 1$, since its right-hand side is negative wherever $0 < R \leq 1$, so $R$ could not return to its limit $1$.
+    For $\nu = -\tfrac{1}{2}$, $R_{\nu} = 1 = \rho_{0}$ by his Eq.~(A.1).
+    For $\nu < -\tfrac{1}{2}$, his Eq.~(A.15) gives $R_{\nu} = 1 / R_{-\nu - 1}$ with $-\nu - 1 > -\tfrac{1}{2}$, so $R_{\nu} < 1 = \rho_{\nu + \epsilon}$.
+    \claude{Bounds of this form for $K_{\nu+1}/K_{\nu}$ are studied by Segura (2011, J.\ Math.\ Anal.\ Appl.\ 374). If that paper states the upper bound, cite it and drop its proof here.}
+\end{proof}
+
+\begin{proof}[Proof of Proposition~\ref{prop:regret}]
+    Taking expectations in Lemma~\ref{lem:pairwise} gives \eqref{eq:regret_bound}, so it remains to prove \eqref{eq:misranking}.
+    Fix a context $k$ and $\theta \in \mathbb{R}$, and let $M_s = \exp\big(\theta T_{k,s} - \lambda^{*}_k F_{k,s} (\exp(\theta) - 1)\big)$ after $s$ steps.
+    Given the past, a step at context $k$ with exposure $f$ multiplies $M$ by $\exp\big(\theta y - \lambda^{*}_k f (\exp(\theta) - 1)\big)$ with $y \sim \mathcal{P}(f \lambda^{*}_k)$, whose expectation is $1$, and a step elsewhere leaves $M$ unchanged.
+    So $M$ is a martingale with $M_0 = 1$, and optional stopping at the bounded time $t$ gives $\mathbb{E}[M_t] = 1$.
+
+    The event $\mu_{j,t} \geq \mu_{i,t}$ implies $\mu_{i,t} \leq x$ or $\mu_{j,t} \geq x$.
+    The posterior of context $k$ is $\Gig(\lambda \given \nu_k + T_{k,t}, a_k, b_k + 2 F_{k,t})$, and $g$ of Lemma~\ref{lem:mean_bounds}, at the second scale $b_k + 2 F_{k,t}$, is increasing with $g(\alpha) = x$ at $\alpha = x (b_k / 2 + F_{k,t}) - a_k / (2x)$.
+    So $g(\nu_k + T_{k,t} + e) \geq x$ exactly when $T_{k,t} \geq x F_{k,t} - \delta_k(x) - e$, for any shift $e$.
+    The shift of Lemma~\ref{lem:mean_bounds} at the posterior order $\nu_j + T_{j,t} \geq \nu_j$ is at most $\epsilon_j$, and $g$ is increasing, so $\mu_{j,t} \leq g(\nu_j + T_{j,t} + \epsilon_j)$.
+    By Lemma~\ref{lem:mean_bounds}, $\mu_{i,t} \leq x$ therefore implies $T_{i,t} < x F_{i,t} - \delta_i(x)$, and $\mu_{j,t} \geq x$ implies $T_{j,t} \geq x F_{j,t} - \delta_j(x) - \epsilon_j$.
+    On the first event take $k = i$ and $\theta = \log(x / \lambda^{*}_i) < 0$.
+    Then $\theta T_{i,t} > \theta (x F_{i,t} - \delta_i(x))$, so $M_t > \exp\big(F_{i,t} \, d(x, \lambda^{*}_i) - \theta \delta_i(x)\big) \geq \exp\big(\phi_i \, d(x, \lambda^{*}_i) - \theta \delta_i(x)\big)$, and Markov's inequality gives the first term of \eqref{eq:misranking}.
+    On the second take $k = j$ and $\theta = \log(x / \lambda^{*}_j) > 0$, and the same steps with $\delta_j(x) + \epsilon_j$ in place of $\delta_i(x)$ give the second term.
+\end{proof}
+
+\begin{proof}[Proof of Corollary~\ref{cor:regret_gamma}]
+    The posterior of context $k$ is a gamma law of shape $\nu_k + T_{k,t}$ and rate $b_k / 2 + F_{k,t}$, with mean $(\nu_k + T_{k,t}) / (b_k / 2 + F_{k,t})$.
+    So $\mu_{i,t} \leq x$ exactly when $T_{i,t} \leq x F_{i,t} - \delta_i(x)$, and $\mu_{j,t} \geq x$ exactly when $T_{j,t} \geq x F_{j,t} - \delta_j(x)$, with $a_k = 0$ in \eqref{eq:prior_counts}.
+    The proof of Proposition~\ref{prop:regret} then applies with $\epsilon_j = 0$.
+\end{proof}
+
+\begin{remark}[The Chernoff exponent]
+    \label{rem:chernoff}
+    Write $A_i(x)$ and $A_j(x)$ for the two terms of \eqref{eq:misranking}, so that $A_i(\lambda^{*}_i) = A_j(\lambda^{*}_j) = 1$.
+    For every grid $\lambda^{*}_j = x_0 < x_1 < \dots < x_n = \lambda^{*}_i$,
+    %
+    \begin{equation}
+        \Pr(\mu_{j,t} \geq \mu_{i,t}) \leq A_i(x_0) + \sum_{k=1}^{n} A_i(x_k) A_j(x_{k-1}) + A_j(x_n) \,.
+        \label{eq:misranking_grid}
+    \end{equation}
+    %
+    To see this, split the event by the cell of $\mu_{i,t}$ among $(-\infty, x_0]$, $(x_{k-1}, x_k]$ and $(x_n, \infty)$.
+    On a middle cell $\mu_{i,t} \leq x_k$ and $\mu_{j,t} > x_{k-1}$, and the product of the martingales of $i$ and $j$, at $x_k$ and $x_{k-1}$, is again a martingale because each step samples one context.
+    With a mesh $h$, every exponent in \eqref{eq:misranking_grid} is at least $\Phi_{ij} - \min(\phi_i, \phi_j) \, h \log(\lambda^{*}_i / \lambda^{*}_j)$, where $\Phi_{ij} = \min_x [\phi_i \, d(x, \lambda^{*}_i) + \phi_j \, d(x, \lambda^{*}_j)]$ is the Chernoff exponent of the pair.
+    A mesh of order $1 / \min(\phi_i, \phi_j)$ therefore attains $\Phi_{ij}$, at the cost of a prefactor linear in $\min(\phi_i, \phi_j)$, so at small exposures \eqref{eq:misranking} can be the smaller bound.
+    Let $\Psi_{ij}$ be the exponent of \eqref{eq:misranking} at its best $x$, where its two exponents cross.
+    Since one of them decreases in $x$ and the other increases, $\Psi_{ij} \leq \Phi_{ij} \leq 2 \Psi_{ij}$.
+\end{remark}
+
 
 \end{document}

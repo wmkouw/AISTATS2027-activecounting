@@ -62,7 +62,7 @@ class _BayesOpt(Agent):
 
     # -- belief ------------------------------------------------------------
 
-    def reset(self, env, prior_moments, recovery):
+    def reset(self, env, prior_moments, recovery, rng=None):
         """One joint belief, not one per context.
 
         An environment that fits its own priors gives the conjugate families more than two
@@ -80,7 +80,8 @@ class _BayesOpt(Agent):
         else:
             moments = list(prior_moments)
         feats = env.context_features() if hasattr(env, "context_features") else None
-        self.gp.reset(moments, features=feats)
+        classes = env.context_classes() if hasattr(env, "context_classes") else None
+        self.gp.reset(moments, features=feats, classes=classes)
         self.recovery = recovery
 
     def observe(self, k, y, f):

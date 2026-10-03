@@ -1,0 +1,31 @@
+setting,model,nlpd,d_nlpd,wins,top1,top5,ms
+Bulk,eig,1.478 ± 0.036,—,—,0.026,0.021,10
+Bulk,eig@gamma-poisson,1.490 ± 0.036*,+0.011*,37/50,0.035,0.024,1
+Bulk,eig@gammamix-poisson,1.490 ± 0.036*,+0.011*,37/50,0.035,0.025,5
+Bulk,eig@logskewnormal-quad,1.484 ± 0.036,+0.006,28/50,0.028,0.022,335
+Bulk,eig@logskewnormal-poisson,1.489 ± 0.037,+0.011,28/50,0.029,0.022,360
+Bulk,eig@logskewnormal-poisson-m8k,1.491 ± 0.037,+0.013,30/50,0.024,0.022,3817
+γ 5–95,eig,3.371 ± 0.014,—,—,0.033,0.026,17
+γ 5–95,eig@gamma-poisson,3.428 ± 0.014***,+0.057***,47/50,0.035,0.026,1
+γ 5–95,eig@gammamix-poisson,3.365 ± 0.014,-0.006,26/50,0.037,0.026,12
+γ 5–95,eig@logskewnormal-quad,3.364 ± 0.014,-0.007,18/50,0.045,0.026,440
+γ 5–95,eig@logskewnormal-poisson,3.364 ± 0.014,-0.007,21/50,0.048,0.027,687
+γ 5–95,eig@logskewnormal-poisson-m8k,3.365 ± 0.015,-0.006,20/50,0.046,0.026,5703
+γ 1–99,eig,3.475 ± 0.014,—,—,0.003,0.008,24
+γ 1–99,eig@gamma-poisson,3.539 ± 0.015***,+0.064***,46/50,0.003,0.009,1
+γ 1–99,eig@gammamix-poisson,3.479 ± 0.013,+0.004,28/50,0.003,0.007,11
+γ 1–99,eig@logskewnormal-quad,3.473 ± 0.014,-0.002,24/50,0.003,0.008,420
+γ 1–99,eig@logskewnormal-poisson,3.473 ± 0.015,-0.002,26/50,0.003,0.008,735
+γ 1–99,eig@logskewnormal-poisson-m8k,3.479 ± 0.015,+0.004,28/50,0.002,0.008,5034
+γ survey,eig,5.367 ± 0.011,—,—,0.021,0.034,49
+γ survey,eig@gamma-poisson,5.512 ± 0.010***,+0.145***,50/50,0.020,0.035,1
+γ survey,eig@gammamix-poisson,5.376 ± 0.011*,+0.009*,30/50,0.020,0.035,22
+γ survey,eig@logskewnormal-quad,5.362 ± 0.011***,-0.004***,13/50,0.023,0.034,352
+γ survey,eig@logskewnormal-poisson,5.365 ± 0.011,-0.002,27/50,0.033,0.048*,1092
+γ survey,eig@logskewnormal-poisson-m8k,5.368 ± 0.011,+0.001,26/50,0.020,0.035,5596
+Hard X-ray,eig,6.663 ± 0.008,—,—,0.004,0.009,1510
+Hard X-ray,eig@gamma-poisson,6.724 ± 0.008***,+0.061***,50/50,0.004,0.011,6
+Hard X-ray,eig@gammamix-poisson,6.668 ± 0.009,+0.006,29/50,0.004,0.009,84
+Hard X-ray,eig@logskewnormal-quad,6.666 ± 0.009,+0.003,32/50,0.004,0.010,1407
+Hard X-ray,eig@logskewnormal-poisson,6.666 ± 0.010,+0.003,29/50,0.004,0.008,624
+Hard X-ray,eig@logskewnormal-poisson-m8k,6.666 ± 0.009,+0.004,29/50,0.004,0.009,6716

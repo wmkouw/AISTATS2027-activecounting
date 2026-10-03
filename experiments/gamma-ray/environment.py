@@ -80,7 +80,7 @@ class PhotonCounting(object):
     CLASSES = ("psr", "fsrq", "bll", "bcu", "unassoc")
 
     def __init__(self, n_sources=48, times=None, budget=120.0, eval_time=5.0,
-                 band=(5.0, 95.0), split_seed=0):
+                 band=(5.0, 95.0), split_seed=0, pop_size=None, pop_seed=7):
         self.n_sources = int(n_sources)
         #: Integration times the scheduler may grant, in megaseconds.
         self.times = (np.array([0.5, 1.0, 2.5, 5.0, 10.0, 25.0]) if times is None
@@ -111,6 +111,13 @@ class PhotonCounting(object):
             half = sub.size // 2
             self.population[c] = sub[order[:half]]
             self.targets[c] = sub[order[half:]]
+        # A small calibration catalogue: priors fitted to only ``pop_size`` known members of
+        # each class, as for a rare class, a new instrument or a pilot survey. One fixed
+        # sample per class, drawn from the prior half; the targets are unchanged.
+        if pop_size is not None:
+            rng_pop = np.random.default_rng(pop_seed)
+            self.population = {c: rng_pop.choice(v, min(int(pop_size), v.size), replace=False)
+                               for c, v in self.population.items()}
 
     # -- the generic environment protocol ----------------------------------
 
@@ -132,6 +139,10 @@ class PhotonCounting(object):
         return float(u[1])
 
     # -- what every agent is told ------------------------------------------
+
+    def context_classes(self):
+        """The source class of each target, for a kernel over discrete context labels."""
+        return list(self._classes)
 
     def initial_beliefs(self, model):
         """One prior per source: this family, fitted to this source's class.

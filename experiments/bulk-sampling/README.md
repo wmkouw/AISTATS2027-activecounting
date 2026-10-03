@@ -46,13 +46,17 @@ stones, so any difference between them is a difference in decisions.
 
 ## What is scored
 
-Three things, because they are not the same thing and a policy can lead on one and trail on
-another:
+The three metrics of the problem statement, plus one diagnostic:
 
-- **NLPD** of held-out stone counts. Needs no true grade.
-- **grade RMSE** over blocks. What a resource statement needs.
-- **top-4 regret**: grade forgone by mining the four blocks the belief ranks highest rather
-  than the four best. What the mine plan needs.
+- **NLPD**: average surprisal of held-out stone counts under the agent's own predictive.
+  Needs no true grade.
+- **regret**: cumulative rate gap weighted by the gravel each sample processed,
+  `sum_t v_t (lam_{k*} - lam_{k_t})`, where `k_t` is the block with the highest posterior
+  mode after sample `t`. In stones. Ties at a zero mode (a gamma posterior with shape
+  below one) go to the higher posterior mean.
+- **inference cost**: wall-clock seconds in `act` plus `observe`, i.e. choosing a design and
+  updating on its outcome. `inference_seconds` is cumulative; divide by `rounds`.
+- **grade RMSE** over blocks, kept as a diagnostic and not reported in the paper's tables.
 
 ## Agents: two axes, crossed
 
@@ -60,11 +64,11 @@ An agent is a **model** plus an **acquisition criterion**. `methods/countmodels.
 the models, `agents/` holds the criteria, and `run.py` crosses them, so the two can be varied
 independently rather than one at a time.
 
-| mixing law | params | conjugate | predictive | ms/decision |
+| mixing law | params | conjugate | predictive | ms/design |
 |---|---|---|---|---|
-| GIG-Poisson (ours) | 3 | yes | Sichel | 8.9 |
-| gamma-Poisson | 2 | yes | negative binomial | 0.8 |
-| lognormal-Poisson | 2 | **no** | grid quadrature | 21 |
+| GIG-Poisson (ours) | 3 | yes | Sichel | 3.1 |
+| gamma-Poisson | 2 | yes | negative binomial | 0.23 |
+| lognormal-Poisson | 2 | **no** | grid quadrature | 6.7 |
 
 | criterion | what it scores |
 |---|---|
@@ -126,7 +130,7 @@ running anything, and aborts on failure.
 | `../../agents/` | one module per acquisition criterion |
 | `run.py` | gate, sequential study over the criterion-by-model grid |
 | `visualize.py` | three panels into `figures/bulk.pdf`, included by the paper |
-| `results/sequential.csv` | per policy, property and checkpoint: NLPD, grade RMSE, regret |
+| `results/sequential.csv` | per policy, property and checkpoint: inference seconds, NLPD, grade RMSE, regret |
 | `results/allocation.csv` | volume each policy gave each block, against its true grade |
 | `results/gate_eig.csv` | each model's EIG against nested Monte Carlo |
 

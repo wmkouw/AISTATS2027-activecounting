@@ -9,12 +9,18 @@ The gravel is shared exactly: each block's stone field is realised once as a Poi
 in effective processed volume, and a sample consumes the next ``v r_k`` metres of it. Two
 agents that process the same gravel recover the same stones.
 
-Three things are scored, because they are not the same thing:
+Three things are scored, the metrics of the problem statement, plus one diagnostic:
 
-    NLPD          held-out stone counts under the agent's own predictive, in nats. An agent
-                  with the wrong model is penalised here more directly than anywhere else.
-    grade RMSE    error of the posterior mean grade over blocks.
-    top-m regret  grade forgone by mining the ``m`` blocks the agent ranks highest.
+    NLPD          average surprisal of held-out stone counts under the agent's own
+                  predictive, in nats. An agent with the wrong model is penalised here more
+                  directly than anywhere else.
+    regret        cumulative rate gap, ``sum_t v_t (lam_{k*} - lam_{k_t})``: after every
+                  sample the block with the highest posterior mode is the agent's pick, and
+                  the grade it forgoes is charged for the gravel that sample processed.
+                  Stones, not a fraction.
+    inference     wall-clock seconds spent choosing a design and updating the belief on its
+                  outcome, cumulative. Divide by ``rounds`` for the cost per design.
+    grade RMSE    error of the posterior mean grade over blocks; a diagnostic only.
 
 Writes to ``data/`` and ``results/``. Figures come from ``visualize.py``.
 
@@ -40,7 +46,6 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 SEED = 0
 N_ENV = 48              # properties
 N_HELDOUT = 24          # held-out samples per block
-TOP_M = 4               # blocks the mine plan will commit to
 CHECKPOINTS = (30.0, 60.0, 120.0, 180.0, 240.0)   # budget spent, m^3
 
 
@@ -109,18 +114,27 @@ def gate(env, verbose=True):
 # --------------------------------------------------------------------------
 
 def evaluate(env, agent, truths, recovery, heldout):
-    """``(nlpd, grade_rmse, topm_regret)`` under the agent's own model."""
+    """``(nlpd, grade_rmse)`` under the agent's own model."""
     nlpd, sq = [], []
     for k in range(env.n_blocks):
         f_eval = env.eval_volume * float(recovery[k])
         nlpd.append(-float(np.mean(agent.logpmf(k, f_eval,
                                                 np.asarray(heldout[k], dtype=float)))))
         sq.append((agent.rate_mean(k) - truths[k]) ** 2)
-    means = np.array([agent.rate_mean(k) for k in range(env.n_blocks)])
-    chosen = np.argsort(-means)[:TOP_M]
-    best = np.sort(truths)[::-1][:TOP_M]
-    regret = float(best.sum() - truths[chosen].sum()) / float(best.sum())
-    return float(np.mean(nlpd)), float(np.sqrt(np.mean(sq))), regret
+    return float(np.mean(nlpd)), float(np.sqrt(np.mean(sq)))
+
+
+def best_block(agent, modes):
+    """The block with the highest posterior mode.
+
+    A gamma posterior with shape below one has its mode at the origin, so an unsampled
+    block can tie with another at zero. Ties go to the higher posterior mean rather than to
+    the lower index, which would reward whatever order the blocks happen to be listed in.
+    """
+    tied = np.flatnonzero(modes == modes.max())
+    if tied.size == 1:
+        return int(tied[0])
+    return int(tied[np.argmax([agent.rate_mean(k) for k in tied])])
 
 
 def run_agent(env, agent, moments, truths, recovery, fields, heldout, rng,
@@ -134,13 +148,15 @@ def run_agent(env, agent, moments, truths, recovery, fields, heldout, rng,
     agent.reset(env, moments, recovery)
     consumed = np.zeros(env.n_blocks)
     allocated = np.zeros(env.n_blocks)
-    spent, rounds, decide_time = 0.0, 0, 0.0
+    spent, rounds, infer_time, regret = 0.0, 0, 0.0, 0.0
+    best = float(np.max(truths))
+    modes = np.array([agent.rate_map(k) for k in range(env.n_blocks)])
     checkpoints, next_cp = [], 0
 
     while next_cp < len(cps_at):
         t0 = time.perf_counter()
         k, v = agent.act(env, rng)
-        decide_time += time.perf_counter() - t0
+        infer_time += time.perf_counter() - t0
 
         if spent + v > cps_at[-1]:
             v = float(min(env.volumes))
@@ -151,22 +167,28 @@ def run_agent(env, agent, moments, truths, recovery, fields, heldout, rng,
         lo, hi = consumed[k], consumed[k] + f
         y = int(np.searchsorted(fields[k], hi) - np.searchsorted(fields[k], lo))
         consumed[k] = hi
+        t0 = time.perf_counter()
         agent.observe(k, y, f)
+        infer_time += time.perf_counter() - t0
         allocated[k] += v
         spent += v
         rounds += 1
 
+        # Only block k's belief moved, so only its mode needs recomputing.
+        modes[k] = agent.rate_map(k)
+        regret += v * (best - float(truths[best_block(agent, modes)]))
+
         while next_cp < len(cps_at) and spent >= cps_at[next_cp] - 1e-9:
-            checkpoints.append((cps_at[next_cp], rounds, decide_time,
-                                *evaluate(env, agent, truths, recovery, heldout)))
+            checkpoints.append((cps_at[next_cp], rounds, infer_time,
+                                *evaluate(env, agent, truths, recovery, heldout), regret))
             next_cp += 1
 
     # An agent whose volumes do not divide the budget stops a little short of the last
     # checkpoint. Record its final state there anyway, so that every agent is compared at
     # the same budget rather than silently dropped from the average.
     while next_cp < len(cps_at):
-        checkpoints.append((cps_at[next_cp], rounds, decide_time,
-                            *evaluate(env, agent, truths, recovery, heldout)))
+        checkpoints.append((cps_at[next_cp], rounds, infer_time,
+                            *evaluate(env, agent, truths, recovery, heldout), regret))
         next_cp += 1
     return checkpoints, allocated
 
@@ -213,13 +235,13 @@ def main():
     save_csv(os.path.join(rd, "allocation.csv"),
              ["policy", "env", "block", "grade_true", "volume_allocated"], alloc_rows)
     save_csv(os.path.join(rd, "sequential.csv"),
-             ["policy", "env", "spent", "rounds", "decide_seconds", "nlpd", "grade_rmse",
-              "topm_regret"], rows)
+             ["policy", "env", "spent", "rounds", "inference_seconds", "nlpd", "grade_rmse",
+              "regret"], rows)
 
     print("\nAt the full budget of {:.0f} m^3, mean over {} properties"
           .format(CHECKPOINTS[-1], N_ENV))
     print("  {:<24} {:>9} {:>11} {:>11} {:>9}".format(
-        "agent", "NLPD", "grade RMSE", "top-4 regret", "ms/dec."))
+        "agent", "NLPD", "grade RMSE", "regret", "ms/design"))
     for agent in agents.build_all(cross=True):
         sel = [r for r in rows
                if r[0] == agent.name and abs(r[2] - CHECKPOINTS[-1]) < 1e-9]

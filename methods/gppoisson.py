@@ -39,7 +39,7 @@ import numpy as np
 from scipy.linalg import cho_factor, cho_solve
 from scipy.special import gammaln
 
-__all__ = ["GPPoisson", "rbf_kernel", "default_features"]
+__all__ = ["GPPoisson", "rbf_correlation", "categorical_correlation", "default_features"]
 
 #: Ridge added to the kernel diagonal for conditioning.
 JITTER = 1e-8
@@ -73,21 +73,57 @@ def rbf_correlation(x, lengthscale=1.0, nugget=0.2):
     return r + (nugget + JITTER) * np.eye(x.shape[0])
 
 
-class GPPoisson(object):
-    """Joint belief over ``K`` log-rates: a GP prior, a Poisson likelihood, Laplace."""
+def categorical_correlation(labels, rho=0.5):
+    """Exchangeable correlation within a label, none across: ``rho [c_i = c_j] + (1 - rho) I``.
 
-    name = "gp-poisson"
-    label = "GP-Poisson"
+    A kernel on a discrete input: contexts are compared by their label alone, so two
+    contexts of the same class are correlated by ``rho`` however different their prior
+    moments, and contexts of different classes are independent. With a single label this is
+    the exchangeable kernel, a shared component plus an independent one.
+    """
+    c = np.asarray(labels, dtype=object)
+    same = (c[:, None] == c[None, :]).astype(float)
+    return rho * same + (1.0 - rho + JITTER) * np.eye(c.size)
+
+
+#: Hyperparameter grids searched by the Laplace marginal likelihood, per kernel.
+THETA_GRID = {
+    "rbf": [(ls, nug) for ls in (0.25, 0.5, 1.0, 2.0, 4.0)
+            for nug in (0.05, 0.2, 0.5, 0.8, 0.98)],
+    "categorical": [(rho,) for rho in (0.02, 0.1, 0.25, 0.5, 0.75, 0.9, 0.98)],
+}
+
+
+class GPPoisson(object):
+    """Joint belief over ``K`` log-rates: a GP prior, a Poisson likelihood, Laplace.
+
+    ``kernel`` is ``"rbf"``, a squared-exponential over continuous context features, or
+    ``"categorical"``, an exchangeable kernel over a discrete context label (the source
+    class where the environment offers ``context_classes``, a single shared label where it
+    does not). Both are correlations; the marginal variances are pinned in :meth:`reset`.
+    """
+
     conjugate = False
 
-    def __init__(self, amplitude=None, lengthscale=1.0, nugget=1e-3):
+    def __init__(self, amplitude=None, lengthscale=1.0, nugget=1e-3, kernel="rbf"):
+        if kernel not in THETA_GRID:
+            raise ValueError("unknown kernel {!r}".format(kernel))
         self.amplitude = amplitude
         self.lengthscale = float(lengthscale)
         self.nugget = float(nugget)
+        self.kernel = kernel
+
+    @property
+    def name(self):
+        return "gp-poisson" if self.kernel == "rbf" else "gp-poisson-cat"
+
+    @property
+    def label(self):
+        return "GP-Poisson (RBF)" if self.kernel == "rbf" else "GP-Poisson (categorical)"
 
     # -- setup -------------------------------------------------------------
 
-    def reset(self, moments, features=None):
+    def reset(self, moments, features=None, classes=None):
         """Prior mean and kernel from the per-context moments the study supplies.
 
         Every model in the comparison is handed the same two prior moments per context, so
@@ -105,17 +141,22 @@ class GPPoisson(object):
         self.prior_sd = np.sqrt(np.maximum(s2, 1e-12))
         self.prior_mean = np.log(np.maximum(mean, 1e-12)) - 0.5 * s2
         self.X = default_features(mom) if features is None else np.asarray(features, float)
+        self.classes = ["all"] * self.K_ctx if classes is None else list(classes)
         self.T = np.zeros(self.K_ctx)
         self.F = np.zeros(self.K_ctx)
         self.g_hat = None
-        self._theta = (self.lengthscale, self.nugget)
+        self._theta = ((self.lengthscale, self.nugget) if self.kernel == "rbf"
+                       else (0.5,))
         self._set_kernel(*self._theta)
         self._n_obs = 0
         self._next_tune = 4
         self._fit()
 
-    def _set_kernel(self, lengthscale, nugget):
-        r = rbf_correlation(self.X, lengthscale, nugget)
+    def _set_kernel(self, *theta):
+        if self.kernel == "rbf":
+            r = rbf_correlation(self.X, *theta)
+        else:
+            r = categorical_correlation(self.classes, *theta)
         self.Kmat = np.outer(self.prior_sd, self.prior_sd) * r
 
     def observe(self, k, y, f):
@@ -145,7 +186,7 @@ class GPPoisson(object):
         return ll - 0.5 * float(d @ a) - 0.5 * logdetB
 
     def _tune(self):
-        """Refit lengthscale and nugget by the Laplace marginal likelihood.
+        """Refit the kernel hyperparameters by the Laplace marginal likelihood.
 
         On a doubling schedule rather than every observation: the objective needs a Laplace
         fit per evaluation, and the hyperparameters move slowly once a few counts are in.
@@ -154,17 +195,16 @@ class GPPoisson(object):
         if not np.any(self.F > 0):
             return
         best, best_theta = -np.inf, self._theta
-        for ls in (0.25, 0.5, 1.0, 2.0, 4.0):
-            for nug in (0.05, 0.2, 0.5, 0.8, 0.98):
-                self._set_kernel(ls, nug)
-                self.g_hat = None
+        for theta in THETA_GRID[self.kernel]:
+            self._set_kernel(*theta)
+            self.g_hat = None
+            try:
                 self._fit()
-                try:
-                    v = self.log_marginal()
-                except Exception:
-                    continue
-                if np.isfinite(v) and v > best:
-                    best, best_theta = v, (ls, nug)
+                v = self.log_marginal()
+            except Exception:
+                continue
+            if np.isfinite(v) and v > best:
+                best, best_theta = v, theta
         self._theta = best_theta
         self._set_kernel(*best_theta)
         self.g_hat = None
@@ -176,6 +216,19 @@ class GPPoisson(object):
         if g is None or g.shape[0] != self.K_ctx:
             g = self.prior_mean.copy()
         m, K = self.prior_mean, self.Kmat
+        cK = cho_factor(K + JITTER * np.eye(self.K_ctx), lower=True)
+
+        def psi(g):
+            """The log posterior up to a constant; concave, so the mode is unique."""
+            if not np.all(np.isfinite(g)):
+                return -np.inf
+            d = g - m
+            with np.errstate(over="ignore"):
+                v = -0.5 * float(d @ cho_solve(cK, d)) + float(np.sum(self.T * g
+                                                                      - self.F * np.exp(g)))
+            return v if np.isfinite(v) else -np.inf
+
+        psi_g = psi(g)
         for _ in range(MAX_NEWTON):
             lam = self.F * np.exp(g)
             grad_ll = self.T - lam            # d/dg of the log likelihood
@@ -185,9 +238,19 @@ class GPPoisson(object):
             c, low = cho_factor(B, lower=True)
             b = W * (g - m) + grad_ll
             a = b - sw * cho_solve((c, low), sw * (K @ b))
-            g_new = m + K @ a
+            direction = m + K @ a - g
+            # A full Newton step can overshoot far from the mode, where exp(g) overflows
+            # for a context with a large count. Halve it until the objective does not fall,
+            # as in the GPML implementation. Near the mode the full step is always taken.
+            t = 1.0
+            g_new = g + direction
+            psi_new = psi(g_new)
+            while psi_new < psi_g - 1e-10 * abs(psi_g) and t > 1e-10:
+                t *= 0.5
+                g_new = g + t * direction
+                psi_new = psi(g_new)
             step = np.max(np.abs(g_new - g))
-            g = g_new
+            g, psi_g = g_new, psi_new
             if step < NEWTON_TOL:
                 break
         self.g_hat = g
@@ -220,14 +283,25 @@ class GPPoisson(object):
         mu, s2 = self.latent(k)
         return np.exp(rng.normal(mu, np.sqrt(s2), size=n))
 
-    def logpmf(self, k, f, y, n_quad=48):
-        """Predictive mass of a count, by Gauss-Hermite over the latent."""
+    def logpmf(self, k, f, y):
+        """Predictive mass of a count: the Poisson integrated against the latent's Gaussian.
+
+        On a uniform grid whose spacing resolves the narrower of the two factors. A fixed
+        Gauss-Hermite rule does not: as a function of the latent, the Poisson term has width
+        about ``1 / sqrt(y + 1)``, and at a few hundred counts that is far below the node
+        spacing of any moderate rule when the latent is still uncertain, which misses most
+        of the mass. At 48 nodes, latent sd 1.3 and 250 counts the NLPD came out 2.8 nats
+        too high.
+        """
         y = np.atleast_1d(np.asarray(y, dtype=float))
         mu, s2 = self.latent(k)
-        x, w = np.polynomial.hermite_e.hermegauss(n_quad)
-        g = mu + np.sqrt(s2) * x
+        s = np.sqrt(s2)
+        h = min(s / 10.0, 0.25 / np.sqrt(float(y.max()) + 1.0))
+        n = int(np.clip(np.ceil(20.0 * s / h) + 1, 97, 200_001))
+        g = np.linspace(mu - 10.0 * s, mu + 10.0 * s, n)
+        logw = (-0.5 * ((g - mu) / s) ** 2 - 0.5 * np.log(2.0 * np.pi * s2)
+                + np.log(g[1] - g[0]))
         lam = np.maximum(f * np.exp(g), 1e-300)
-        logw = np.log(w / np.sqrt(2.0 * np.pi))
         ll = (-lam[None, :] + y[:, None] * np.log(lam)[None, :]
               - gammaln(y + 1.0)[:, None] + logw[None, :])
         mx = ll.max(axis=1, keepdims=True)

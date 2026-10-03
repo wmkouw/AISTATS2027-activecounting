@@ -6,14 +6,19 @@ the bulk-sampling study they are drawn from the GIG-Poisson law, so a model that
 law is correct by construction. Here they are measured photon fluxes from the Fermi-LAT
 catalogue, and every model in the comparison is misspecified to some degree, ours included.
 
-Scores:
+Scores, the metrics of the problem statement plus one diagnostic:
 
-    NLPD        held-out photon counts under the agent's own predictive, in nats.
-    flux error  root-mean-square error of the posterior mean flux, in dex. Fluxes span
-                decades, so an absolute error would be a report on the brightest source
-                alone; a logarithmic one weights every source equally.
-    top-m regret flux forgone by scheduling deep follow-up on the m sources the agent ranks
-                highest rather than the m brightest.
+    NLPD        average surprisal of held-out photon counts under the agent's own
+                predictive, in nats.
+    regret      cumulative rate gap, ``sum_t t_t (lam_{k*} - lam_{k_t})``: after every
+                observation the source with the highest posterior mode is the agent's pick,
+                and the flux it forgoes is charged for that observation's integration time.
+                In 1e-10 cm^-2 s^-1 Ms.
+    inference   wall-clock seconds spent choosing a design and updating the belief on its
+                outcome, cumulative. Divide by ``rounds`` for the cost per design.
+    flux error  root-mean-square error of the posterior mean flux, in dex; a diagnostic
+                only. Fluxes span decades, so an absolute error would be a report on the
+                brightest source alone; a logarithmic one weights every source equally.
 
 Run: python experiments/gamma-ray/run.py
 """
@@ -41,7 +46,6 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 SEED = 0
 N_ENV = 24
 N_HELDOUT = 24
-TOP_M = 8
 CHECKPOINTS = (15.0, 30.0, 60.0, 90.0, 120.0)     # telescope time spent, Ms
 
 
@@ -103,24 +107,35 @@ def evaluate(env, agent, truths, heldout):
                                                 np.asarray(heldout[k], dtype=float)))))
         est = max(agent.rate_mean(k), 1e-12)
         sq.append((np.log10(est) - np.log10(truths[k])) ** 2)
-    means = np.array([agent.rate_mean(k) for k in range(env.n_sources)])
-    chosen = np.argsort(-means)[:TOP_M]
-    best = np.sort(truths)[::-1][:TOP_M]
-    regret = float(best.sum() - truths[chosen].sum()) / float(best.sum())
-    return float(np.mean(nlpd)), float(np.sqrt(np.mean(sq))), regret
+    return float(np.mean(nlpd)), float(np.sqrt(np.mean(sq)))
+
+
+def best_source(agent, modes):
+    """The source with the highest posterior mode.
+
+    A gamma posterior with shape below one has its mode at the origin, so unobserved
+    sources can tie at zero. Ties go to the higher posterior mean rather than to the lower
+    index, which would reward whatever order the catalogue happens to list them in.
+    """
+    tied = np.flatnonzero(modes == modes.max())
+    if tied.size == 1:
+        return int(tied[0])
+    return int(tied[np.argmax([agent.rate_mean(k) for k in tied])])
 
 
 def run_agent(env, agent, moments, truths, recovery, streams, heldout, rng):
     agent.reset(env, moments, recovery)
     consumed = np.zeros(env.n_sources)
     allocated = np.zeros(env.n_sources)
-    spent, rounds, decide_time = 0.0, 0, 0.0
+    spent, rounds, infer_time, regret = 0.0, 0, 0.0, 0.0
+    best = float(np.max(truths))
+    modes = np.array([agent.rate_map(k) for k in range(env.n_sources)])
     checkpoints, next_cp = [], 0
 
     while next_cp < len(CHECKPOINTS):
         t0 = time.perf_counter()
         k, t = agent.act(env, rng)
-        decide_time += time.perf_counter() - t0
+        infer_time += time.perf_counter() - t0
 
         if spent + t > CHECKPOINTS[-1]:
             t = float(min(env.times))
@@ -131,19 +146,25 @@ def run_agent(env, agent, moments, truths, recovery, streams, heldout, rng):
         lo, hi = consumed[k], consumed[k] + f
         y = int(np.searchsorted(streams[k], hi) - np.searchsorted(streams[k], lo))
         consumed[k] = hi
+        t0 = time.perf_counter()
         agent.observe(k, y, f)
+        infer_time += time.perf_counter() - t0
         allocated[k] += t
         spent += t
         rounds += 1
 
+        # Only source k's belief moved, so only its mode needs recomputing.
+        modes[k] = agent.rate_map(k)
+        regret += t * (best - float(truths[best_source(agent, modes)]))
+
         while next_cp < len(CHECKPOINTS) and spent >= CHECKPOINTS[next_cp] - 1e-9:
-            checkpoints.append((CHECKPOINTS[next_cp], rounds, decide_time,
-                                *evaluate(env, agent, truths, heldout)))
+            checkpoints.append((CHECKPOINTS[next_cp], rounds, infer_time,
+                                *evaluate(env, agent, truths, heldout), regret))
             next_cp += 1
 
     while next_cp < len(CHECKPOINTS):
-        checkpoints.append((CHECKPOINTS[next_cp], rounds, decide_time,
-                            *evaluate(env, agent, truths, heldout)))
+        checkpoints.append((CHECKPOINTS[next_cp], rounds, infer_time,
+                            *evaluate(env, agent, truths, heldout), regret))
         next_cp += 1
     return checkpoints, allocated
 
@@ -184,21 +205,21 @@ def main():
         # Written after every programme, so a run that is interrupted still leaves usable
         # results rather than nothing at all.
         save_csv(os.path.join(rd, "sequential.csv"),
-                 ["policy", "env", "spent", "rounds", "decide_seconds", "nlpd",
-                  "flux_dex", "topm_regret"], rows)
+                 ["policy", "env", "spent", "rounds", "inference_seconds", "nlpd",
+                  "flux_dex", "regret"], rows)
         print("  programme {:2d} done".format(e))
 
     save_csv(os.path.join(dd, "programmes.csv"), ["env", "source", "flux_true"], env_rows)
     save_csv(os.path.join(rd, "allocation.csv"),
              ["policy", "env", "source", "flux_true", "time_allocated"], alloc_rows)
     save_csv(os.path.join(rd, "sequential.csv"),
-             ["policy", "env", "spent", "rounds", "decide_seconds", "nlpd", "flux_dex",
-              "topm_regret"], rows)
+             ["policy", "env", "spent", "rounds", "inference_seconds", "nlpd", "flux_dex",
+              "regret"], rows)
 
     print("\nAt the full budget of {:.0f} Ms, mean over {} programmes"
           .format(CHECKPOINTS[-1], N_ENV))
     print("  {:<24} {:>9} {:>11} {:>11} {:>9}".format(
-        "agent", "NLPD", "flux (dex)", "top-8 regret", "ms/dec."))
+        "agent", "NLPD", "flux (dex)", "regret", "ms/design"))
     for agent in agents.build_all(cross="models"):
         sel = [r for r in rows
                if r[0] == agent.name and abs(r[2] - CHECKPOINTS[-1]) < 1e-9]

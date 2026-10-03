@@ -72,7 +72,7 @@ def main():
     with open(path, "w", newline="") as fh:
         w = csv.writer(fh)
         w.writerow(["n_blocks", "budget_per_block", "policy", "nlpd", "grade_rmse",
-                    "topm_regret", "nlpd_delta_vs_eig", "paired_t"])
+                    "regret", "nlpd_delta_vs_eig", "paired_t"])
         w.writerows(rows)
     print("\n  wrote results/scarcity_sweep.csv ({} rows)".format(len(rows)))
     return 0

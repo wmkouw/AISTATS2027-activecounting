@@ -80,12 +80,16 @@ the same time on the same source record the same photons.
 
 ## What is scored
 
-- **NLPD** of held-out photon counts at a reference integration time, under the agent's own
-  predictive.
-- **flux error in dex**, the root-mean-square error of `log10` of the posterior mean flux.
-  Fluxes span decades, so an absolute error would be a report on the brightest source alone.
-- **top-8 regret**, the flux forgone by scheduling deep follow-up on the eight sources the
-  agent ranks highest rather than the eight brightest.
+- **NLPD**: average surprisal of held-out photon counts at a reference integration time,
+  under the agent's own predictive.
+- **regret**: cumulative rate gap weighted by integration time,
+  `sum_t t_t (lam_{k*} - lam_{k_t})`, where `k_t` is the source with the highest posterior
+  mode after observation `t`. In `1e-10 cm^-2 s^-1 Ms`. Ties at a zero mode go to the
+  higher posterior mean.
+- **inference cost**: wall-clock seconds in `act` plus `observe`. `inference_seconds` is
+  cumulative; divide by `rounds`.
+- **flux error in dex**, the root-mean-square error of `log10` of the posterior mean flux,
+  kept as a diagnostic and not reported in the paper's tables.
 
 ## Simplifications, stated rather than hidden
 

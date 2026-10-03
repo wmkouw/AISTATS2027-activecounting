@@ -81,7 +81,7 @@ def column(by, policy, field, envs):
 
 
 def ms_per_decision(by, policy, envs):
-    return [1000.0 * float(by[policy][e]["decide_seconds"]) / float(by[policy][e]["rounds"])
+    return [1000.0 * float(by[policy][e]["inference_seconds"]) / float(by[policy][e]["rounds"])
             for e in envs]
 
 
@@ -370,13 +370,13 @@ def main():
     print("Regenerating the paper's results tables from the recorded runs.\n")
     n, ags = sequential_table(
         "bulk-sampling/results/sequential.csv", 240.0,
-        [("nlpd", "NLPD", 3), ("grade_rmse", "RMSE", 3), ("topm_regret", "regret", 3)],
+        [("nlpd", "NLPD", 3), ("regret", "regret", 1)],
         "bulk.tex")
     print("    bulk: %d agents over %d properties" % (len(ags), n))
 
     n, ags = sequential_table(
         "gamma-ray/results/sequential.csv", 120.0,
-        [("nlpd", "NLPD", 3), ("flux_dex", "dex", 3), ("topm_regret", "regret", 4)],
+        [("nlpd", "NLPD", 3), ("regret", "regret", 1)],
         "photon.tex")
     print("    photon: %d agents over %d programmes" % (len(ags), n))
 

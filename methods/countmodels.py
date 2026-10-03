@@ -31,11 +31,16 @@ from .gigpoisson import (gig_logpdf, gig_moments, gig_sample, posterior as gig_p
                          sichel_logpmf, sichel_support)
 
 __all__ = ["CountModel", "GIGPoisson", "GammaPoisson", "LognormalPoisson",
-           "poisson_entropy", "MODELS", "build_model"]
+           "LogNormalLikelihood", "poisson_entropy", "MODELS", "EXTRA_MODELS",
+           "build_model"]
 
 POISSON_SERIES_FROM = 400.0
 QUAD_NODES = 64
 LOG_DENSITY_DROP = 75.0
+#: Total log-likelihood by which a GIG population fit may trail the gamma fit before it is
+#: treated as a failed optimisation and restarted. Rounding in SciPy's single-start fit
+#: leaves a few thousandths of a nat either way; a failed fit trails by tens of nats.
+FIT_SLACK = 0.1
 _GAUSS = {}
 
 
@@ -100,6 +105,10 @@ class CountModel(object):
 
     def rate_moments(self, belief):
         """``(mean, variance)`` of the rate under the belief."""
+        raise NotImplementedError
+
+    def rate_map(self, belief):
+        """Mode of the posterior density over the rate, in the rate's own coordinate."""
         raise NotImplementedError
 
     def sample_rate(self, belief, n, rng):
@@ -174,8 +183,37 @@ class GIGPoisson(CountModel):
         return gig_from_mean(self.order, mean, np.sqrt(lo * hi))
 
     def fit_population(self, rates):
-        from scipy.stats import geninvgauss
-        p, omega, _, eta = geninvgauss.fit(np.asarray(rates, dtype=float), floc=0.0)
+        """Maximum likelihood, guarded against the optimiser stopping short.
+
+        SciPy's single-start fit can stop at a local optimum whose likelihood is below the
+        gamma's, which cannot be the maximum: the gamma is the ``omega -> 0`` limit of this
+        family, so the GIG maximum is at least the gamma maximum. When that happens the fit is
+        restarted from several orders and concentrations and the best is kept. A fit within
+        :data:`FIT_SLACK` nats of the gamma, or above it, is returned unchanged.
+        """
+        from scipy.optimize import minimize
+        from scipy.stats import gamma as gamma_dist, geninvgauss
+        x = np.asarray(rates, dtype=float)
+
+        def loglik(p, omega, eta):
+            return float(np.sum(geninvgauss.logpdf(x, p, omega, scale=eta)))
+
+        p, omega, _, eta = geninvgauss.fit(x, floc=0.0)
+        shape, _, scale = gamma_dist.fit(x, floc=0.0)
+        floor = float(np.sum(gamma_dist.logpdf(x, shape, scale=scale)))
+        if not loglik(p, omega, eta) >= floor - FIT_SLACK:
+            def nll(th):
+                v = -loglik(th[0], np.exp(th[1]), np.exp(th[2]))
+                return v if np.isfinite(v) else 1e300
+            best = None
+            for p0 in (-3.0, -1.0, 0.5, 2.0, 5.0):
+                for omega0 in (0.01, 0.3, 3.0):
+                    r = minimize(nll, [p0, np.log(omega0), np.log(x.mean())],
+                                 method="Nelder-Mead",
+                                 options=dict(maxiter=4000, xatol=1e-8, fatol=1e-10))
+                    if best is None or r.fun < best.fun:
+                        best = r
+            p, omega, eta = best.x[0], np.exp(best.x[1]), np.exp(best.x[2])
         # SciPy's (p, b, scale) is our (order, omega, eta); invert eta = sqrt(a/b).
         return {"alpha": float(p), "a": float(eta * omega), "b": float(omega / eta)}
 
@@ -188,8 +226,33 @@ class GIGPoisson(CountModel):
     def rate_moments(self, belief):
         return gig_moments(belief)
 
+    def rate_map(self, belief):
+        # Stationary point of (alpha - 1) log lam - (a / lam + b lam) / 2.
+        alpha, a, b = belief["alpha"], belief["a"], belief["b"]
+        return float(((alpha - 1.0) + np.sqrt((alpha - 1.0) ** 2 + a * b)) / b)
+
     def sample_rate(self, belief, n, rng):
         return gig_sample(belief, n, rng)
+
+    def rate_quantile(self, belief, q):
+        """Posterior quantiles of the rate, from the log-concave density of ``log lam``.
+
+        SciPy's ``geninvgauss.ppf`` takes about a millisecond per call and fails outright
+        once the order has grown by a few thousand counts, so the density
+        ``alpha s - (a e^{-s} + b e^{s}) / 2`` is integrated on a grid of twelve curvature
+        widths either side of its mode, which a log-concave density cannot escape, and the
+        cumulative distribution is inverted by interpolation.
+        """
+        alpha, a, b = belief["alpha"], belief["a"], belief["b"]
+        mode = self.rate_map(belief)
+        s0 = float(np.log(mode)) if mode > 0 else float(np.log(np.sqrt(a / b)))
+        sd = 1.0 / np.sqrt(0.5 * (a * np.exp(-s0) + b * np.exp(s0)))
+        s = s0 + sd * np.linspace(-12.0, 12.0, 4001)
+        h = alpha * s - 0.5 * (a * np.exp(-s) + b * np.exp(s))
+        w = np.exp(h - h.max())
+        cdf = np.concatenate([[0.0], np.cumsum(0.5 * (w[1:] + w[:-1]))])
+        return np.exp(np.interp(q, cdf / cdf[-1], s))
+
 
     def support(self, belief, f, tail_tol=1e-9):
         return sichel_support(belief, f, tail_tol=tail_tol)
@@ -260,8 +323,17 @@ class GammaPoisson(CountModel):
         a, b = belief["a"], belief["b"]
         return float(a / b), float(a / (b * b))
 
+    def rate_map(self, belief):
+        # A shape below one puts the mode at the origin.
+        return float(max(belief["a"] - 1.0, 0.0) / belief["b"])
+
     def sample_rate(self, belief, n, rng):
         return rng.gamma(belief["a"], 1.0 / belief["b"], size=n)
+
+    def rate_quantile(self, belief, q):
+        from scipy.stats import gamma as gamma_dist
+        return gamma_dist.ppf(q, belief["a"], scale=1.0 / belief["b"])
+
 
     def support(self, belief, f, tail_tol=1e-9):
         a, s = belief["a"], f / belief["b"]
@@ -377,6 +449,22 @@ class LognormalPoisson(CountModel):
         m = float(np.sum(w * lam))
         return m, float(np.sum(w * lam * lam) - m * m)
 
+    def rate_map(self, belief):
+        """Grid mode of the density in ``lam``, refined by a parabola through its neighbours.
+
+        The weights are masses on a uniform grid in log-rate, so the density in the rate
+        itself carries the Jacobian ``1 / lam``. Without the refinement the mode moves in
+        steps of the grid spacing, and two contexts with close rates would tie or swap.
+        """
+        s = belief["s"]
+        g = belief["logw"] - s
+        i = int(np.argmax(g))
+        if 0 < i < s.size - 1:
+            den = g[i - 1] - 2.0 * g[i] + g[i + 1]
+            if den < 0.0:
+                return float(np.exp(s[i] + 0.5 * (s[1] - s[0]) * (g[i - 1] - g[i + 1]) / den))
+        return float(np.exp(s[i]))
+
     def sample_rate(self, belief, n, rng):
         idx = rng.choice(belief["s"].size, size=n, p=self._weights(belief))
         return np.exp(belief["s"][idx])
@@ -426,11 +514,209 @@ class LognormalPoisson(CountModel):
         return float(np.sum(self._weights(belief) * poisson_entropy(f * lam)))
 
 
+# --------------------------------------------------------------------------
+
+def _discrete_lognormal_logpmf(y, mu, sigma):
+    """``log P(y)`` for a lognormal on the counts, binned onto the integers.
+
+    The bins ``[0, 0.5], [0.5, 1.5], [1.5, 2.5], ...`` tile ``[0, inf)`` exactly, so this is
+    a proper mass function on the non-negative integers and sums to one without any
+    renormalisation. It is also what makes a zero count representable at all: a continuous
+    lognormal puts no density at ``y = 0``, and the usual fix of modelling ``log(y + c)``
+    buries an arbitrary offset in the likelihood. Here the zero bin is just ``[0, 0.5]``.
+
+    ``mu`` is the *mean* count, so the log-scale location carries the usual ``-sigma^2/2``.
+    Differences of the normal CDF cancel badly in either tail, so each side is evaluated with
+    whichever of ``ndtr`` and its reflection keeps the subtraction away from one.
+    """
+    from scipy.special import ndtr
+
+    y = np.asarray(y, dtype=float)
+    mu = np.maximum(np.asarray(mu, dtype=float), 1e-300)
+    m = np.log(mu) - 0.5 * sigma * sigma
+    hi = (np.log(y + 0.5) - m) / sigma
+    with np.errstate(divide="ignore"):
+        lo = np.where(y >= 1.0, (np.log(np.maximum(y - 0.5, 1e-300)) - m) / sigma, -np.inf)
+    upper = lo > 0.0
+    p = np.where(upper, ndtr(-lo) - ndtr(-hi), ndtr(hi) - ndtr(lo))
+    return np.log(np.maximum(p, 1e-300))
+
+
+class LogNormalLikelihood(CountModel):
+    """A lognormal *likelihood* on the counts, not a lognormal mixing law.
+
+    The other remedy for overdispersion in the standard list, and the one practitioners reach
+    for most often: stop modelling the count as a count, take logs, and fit a Gaussian. Here
+    the count is lognormal about its mean,
+
+        y | u, lam  ~  LogNormal(log(f(u) lam) - s^2/2, s^2),
+
+    so ``E[y | lam] = f(u) lam`` as in every other model, and ``s`` is a free observation
+    scale that absorbs the overdispersion. Note what this is *not*: :class:`LognormalPoisson`
+    keeps the Poisson likelihood and puts a lognormal on the rate. This replaces the
+    likelihood itself.
+
+    **It is a baseline, and it is included because it should fail in an informative way.**
+    Two structural differences from anything built on a Poisson.
+
+    First, the variance is ``(f lam)^2 (e^{s^2} - 1)``, quadratic in the exposure, where a
+    Poisson-based model has ``f lam + f^2 V[lam]``. There is no counting floor. Matching a
+    count model's dispersion therefore fixes ``s`` at *one* exposure and gets it wrong at
+    every other: too little variance where counts are few, too much where they are many.
+    :data:`f_ref` is that exposure and it is explicit rather than buried.
+
+    Second, and in its favour, ``s`` is free, so the Fano factor is unconstrained. The
+    GIG-Poisson family has ``F(u) = 1 + f(u) V/E > 1`` always and cannot represent
+    underdispersion at all; this can.
+
+    The belief over the rate is carried on a grid in log-rate, as in
+    :class:`LognormalPoisson`, because binning the lognormal onto the integers costs the
+    conjugacy that the continuous version would have had.
+    """
+
+    name = "lognormal-likelihood"
+    label = "log-normal lik."
+    conjugate = False
+
+    def __init__(self, n_grid=128, width=8.0, f_ref=1.0):
+        self.n_grid = int(n_grid)
+        self.width = float(width)
+        #: Exposure at which the observation scale is matched to a Poisson-based model.
+        self.f_ref = float(f_ref)
+
+    # -- setup -------------------------------------------------------------
+
+    def _sigma_for(self, mean, var):
+        """The observation scale that reproduces a count model's variance at ``f_ref``.
+
+        A Poisson-based model at exposure ``f`` has ``V[y] = f E[lam] + f^2 V[lam]``; this
+        model has ``V[y] = f^2 ((e^{s^2} - 1) E[lam^2] + V[lam])``. Equating them at
+        ``f_ref`` leaves ``e^{s^2} - 1 = E[lam] / (f_ref E[lam^2])``, which is the whole of
+        the calibration and also the whole of the problem: it depends on ``f_ref``.
+        """
+        e1 = float(mean)
+        e2 = float(var + mean * mean)
+        return float(np.sqrt(np.log1p(e1 / max(self.f_ref * e2, 1e-300))))
+
+    def _grid(self, mu, sig):
+        s = np.linspace(mu - self.width * sig, mu + self.width * sig, self.n_grid)
+        logw = -0.5 * ((s - mu) / sig) ** 2
+        return {"s": s, "logw": logw - logsumexp(logw)}
+
+    def prior_from_moments(self, mean, var):
+        sig2 = float(np.log1p(var / (mean * mean)))
+        b = self._grid(float(np.log(mean) - 0.5 * sig2), np.sqrt(sig2))
+        b["sigma"] = self._sigma_for(mean, var)
+        return b
+
+    def fit_population(self, rates):
+        from scipy.stats import lognorm
+        x = np.asarray(rates, dtype=float)
+        sig, _, scale = lognorm.fit(x, floc=0.0)
+        b = self._grid(float(np.log(scale)), float(sig))
+        b["sigma"] = self._sigma_for(float(x.mean()), float(x.var()))
+        return b
+
+    # -- belief ------------------------------------------------------------
+
+    def update(self, belief, y, f):
+        lam = np.exp(belief["s"])
+        ll = _discrete_lognormal_logpmf(float(y), f * lam, belief["sigma"])
+        logw = belief["logw"] + ll
+        return {"s": belief["s"], "logw": logw - logsumexp(logw),
+                "sigma": belief["sigma"]}
+
+    def _weights(self, belief):
+        return np.exp(belief["logw"])
+
+    def rate_mean(self, belief):
+        return float(np.sum(self._weights(belief) * np.exp(belief["s"])))
+
+    def rate_moments(self, belief):
+        w, lam = self._weights(belief), np.exp(belief["s"])
+        m = float(np.sum(w * lam))
+        return m, float(np.sum(w * lam * lam) - m * m)
+
+    def sample_rate(self, belief, n, rng):
+        idx = rng.choice(belief["s"].size, size=n, p=self._weights(belief))
+        return np.exp(belief["s"][idx])
+
+    def rate_map(self, belief):
+        """Grid mode of the density in ``lam``, refined by a parabola through its neighbours.
+
+        Same construction as :meth:`LognormalPoisson.rate_map`, and for the same reason: the
+        weights are masses on a uniform grid in log-rate, so the density in the rate carries
+        the Jacobian ``1 / lam``, and without the refinement the mode moves in grid steps and
+        two contexts with close rates would tie.
+        """
+        s = belief["s"]
+        g = belief["logw"] - s
+        i = int(np.argmax(g))
+        if 0 < i < s.size - 1:
+            den = g[i - 1] - 2.0 * g[i] + g[i + 1]
+            if den < 0.0:
+                return float(np.exp(s[i] + 0.5 * (s[1] - s[0]) * (g[i - 1] - g[i + 1]) / den))
+        return float(np.exp(s[i]))
+
+    # -- predictive --------------------------------------------------------
+
+    def logpmf(self, belief, f, y):
+        y = np.atleast_1d(np.asarray(y, dtype=float))
+        lam = np.exp(belief["s"])
+        ll = _discrete_lognormal_logpmf(y[:, None], (f * lam)[None, :], belief["sigma"])
+        return logsumexp(ll + belief["logw"][None, :], axis=1)
+
+    def support_and_logpmf(self, belief, f, tail_tol=1e-9):
+        m, v = self.rate_moments(belief)
+        s2 = belief["sigma"] ** 2
+        var = f * f * ((np.expm1(s2)) * (v + m * m) + v)
+        ymax = int(f * m + 12.0 * np.sqrt(max(var, 0.0)) + 64.0)
+        for _ in range(20):
+            ymax = min(ymax, 200_000)
+            y = np.arange(ymax + 1, dtype=float)
+            lp = self.logpmf(belief, f, y)
+            if 1.0 - np.exp(logsumexp(lp)) < tail_tol or ymax == 200_000:
+                return y, lp
+            ymax *= 2
+        return y, lp
+
+    def support(self, belief, f, tail_tol=1e-9):
+        return self.support_and_logpmf(belief, f, tail_tol)[0]
+
+    def predictive_entropy(self, belief, f):
+        if f <= 0.0:
+            return 0.0
+        _, lp = self.support_and_logpmf(belief, f)
+        return -float(np.sum(np.exp(lp) * lp))
+
+    def aleatoric_entropy(self, belief, f):
+        """``E_lam H[p(y | lam)]``, the binned lognormal's entropy averaged over the grid.
+
+        Summed over the support at every grid point, because the binned lognormal has no
+        closed-form entropy where the Poisson does. Subsampling the grid and interpolating
+        was tried and rejected: at a stride of eight it bought a factor of 1.2 in time and
+        cost up to 0.045 nats at small exposures, which is larger than several of the
+        differences this model is meant to be measured against.
+        """
+        if f <= 0.0:
+            return 0.0
+        lam = np.exp(belief["s"])
+        y = self.support(belief, f)
+        lp = _discrete_lognormal_logpmf(y[:, None], (f * lam)[None, :], belief["sigma"])
+        h = -np.sum(np.exp(lp) * lp, axis=0)
+        return float(np.sum(self._weights(belief) * h))
+
+
 MODELS = (GIGPoisson, GammaPoisson, LognormalPoisson)
+
+#: Kept out of :data:`MODELS` so that every study already in the repository writes exactly
+#: what it wrote before: the gamma-ray correctness gate iterates :data:`MODELS`, and adding a
+#: member would silently change its output. :func:`build_model` still finds it by name.
+EXTRA_MODELS = (LogNormalLikelihood,)
 
 
 def build_model(name):
-    for cls in MODELS:
+    for cls in MODELS + EXTRA_MODELS:
         if cls.name == name:
             return cls()
     raise ValueError("unknown model {!r}".format(name))

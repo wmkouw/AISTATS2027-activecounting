@@ -1,0 +1,915 @@
+\documentclass[twoside]{article}
+
+\usepackage{aistats2027}
+% If your paper is accepted, change the options for the package
+% aistats2027 as follows:
+%
+%\usepackage[accepted]{aistats2027}
+%
+% This option will print headings for the title of your paper and
+% headings for the authors names, plus a copyright note at the end of
+% the first column of the first page.
+
+% We also include a `preprint' option for non-anonymous preprints.
+% Change the options for the package aistats2027 as follows:
+%
+%\usepackage[preprint]{aistats2027}
+%
+% This option will print headings for the title of your paper and
+% headings for the authors names, but does not print the copyright and 
+% venue note at the end of the first column of the first page.
+
+% Submissions have to follow US letter format.
+% In case your local TeX installation defaults to A4, you will need to
+% set papersize explicitly by activating the following three lines:
+% \special{papersize = 8.5in, 11in}
+% \setlength{\pdfpageheight}{11in}
+% \setlength{\pdfpagewidth}{8.5in}
+
+% If you use the natbib package, activate the following three lines:
+%\usepackage[round]{natbib}
+%\renewcommand{\bibname}{References}
+%\renewcommand{\bibsection}{\subsubsection*{\bibname}}
+
+% If you use BibTeX in apalike style, activate the following line:
+%\bibliographystyle{apalike}
+
+% Packages. The style file loads amsmath only, so \mathbb and \bm need amssymb and bm.
+\usepackage{amssymb}
+\usepackage{amsthm}
+\usepackage{bm}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{multirow}
+
+% Float placement. The defaults reserve a fifth of every page for text and refuse a page
+% more than 70 per cent float, which on a paper with eight floats in the body defers them
+% and leaves gaps behind. These let a page carry the float it belongs with. Nothing about
+% the typography changes: same font, same measure, same leading.
+\renewcommand{\topfraction}{0.9}
+\renewcommand{\bottomfraction}{0.8}
+\renewcommand{\textfraction}{0.07}
+\renewcommand{\floatpagefraction}{0.75}
+\setcounter{topnumber}{3}
+\setcounter{totalnumber}{4}
+
+%\usepackage[disable]{todonotes}
+ \usepackage[]{todonotes}
+\newcommand{\wmk}[2][] {\todo[inline,backgroundcolor=green!20!white, #1]{(Wouter) #2}}
+\newcommand{\claude}[2][] {\todo[inline,backgroundcolor=blue!20!white, #1]{(Claude) #2}}
+
+% Notation, following the conventions in .claude/skills/latex-writing-style.
+\newcommand\given[1][]{\,#1\vert\,}
+\providecommand{\dif}{\mathrm{d}}
+\providecommand{\Ex}[2]{\mathbb{E}_{#1}\!\left[#2\right]}
+\providecommand{\Var}[2]{\mathbb{V}_{#1}\!\left[#2\right]}
+\providecommand{\Cov}[2]{\mathbb{C}_{#1}\!\left[#2\right]}
+
+% Parametric distributions: a calligraphic capital, plus an upright lowercase where one
+% letter will not do. \mathcal is defined for uppercase letters only.
+\providecommand{\Gig}{\mathcal{GIG}}  % generalised inverse Gaussian
+\providecommand{\Sic}{\mathcal{S}\mathrm{i}}   % Sichel
+\providecommand{\NBin}{\mathcal{NB}}  % negative binomial
+
+\usepackage[round]{natbib}
+\renewcommand{\bibname}{References}
+\renewcommand{\bibsection}{\subsubsection*{\bibname}}
+\bibliographystyle{apalike}
+
+\theoremstyle{plain}
+\newtheorem{proposition}{Proposition}
+\newtheorem{corollary}{Corollary}
+\newtheorem{lemma}{Lemma}
+
+\theoremstyle{definition}
+\newtheorem{assumption}{Assumption}
+
+\theoremstyle{remark}
+\newtheorem{remark}{Remark}
+
+\begin{document}
+
+% If your paper is accepted and the title of your paper is very long,
+% the style will print as headings an error message. Use the following
+% command to supply a shorter title of your paper so that it can be
+% used as headings.
+%
+%\runningtitle{I use this title instead because the last one was very long}
+
+% If your paper is accepted and the number of authors is large, the
+% style will print as headings an error message. Use the following
+% command to supply a shorter version of the author names so that
+% they can be used as headings (for example, use only the surnames)
+%
+%\runningauthor{Surname 1, Surname 2, Surname 3, ...., Surname n}
+
+\twocolumn[
+
+\aistatstitle{Sequential experimental design for overdispersed count rates\\ with Sichel distributed predictions}
+
+\aistatsauthor{Anonymous Author}
+
+\aistatsaddress{Anonymous Institution} ]
+
+\begin{abstract}
+Overdispersed count rates refer to phenomena in which the count variance exceeds the average count rate. Examples include looking for diamonds in carbon-rich sedimentary layers, counting photons in gamma-ray observation, or the spike count rate in populations of neurons. We propose a procedure for sequential Bayesian experimental design under a Poisson likelihood whose rate is modulated multiplicatively with an exposure function. The prior distribution over the rate parameter is a generalized inverse Gaussian prior, which is conjugate and yields an exact posterior predictive distributed as the Sichel law. Expected information gain is then calculated from two deterministic quadrature operations, providing a faster alternative to nested Monte Carlo sampling.
+We show that the posterior concentrates if the accumulated exposure diverges, which is a persistence-of-excitation condition on exposure rather than on sample size. The proposed procedure is compared to state-of-the-art methods in three natural settings.
+\end{abstract}
+
+\section{Introduction}
+\label{sec:intro}
+
+Counting is fundamental to many fields of science and engineering. For example, in astronomy, photons are recorded over a period of time, and, in ecology, a camera trap counts the number of wolves passing by per week. In all these experiments, an experimenter has to choose how long the detector keeps counting, refered to as dwell time. Using the information obtained so far to optimize dwell time is called sequential optimal experimental design \citep{lindley1956measure,chaloner1995bayesian}. In phenomena with \emph{overdispersed} counts, the variance of the counts exceeds the average count. For example, in gamma ray observation, the detector will often pick up barely anything but occasionally it will detect millions of photons, which means its count variance is orders of magnitude larger than the average count. The overdispersed nature presents a modelling challenge.
+
+The expected information gain is an expectation of a Kullback-Leibler divergence over a predictive distribution \citep{ryan2016review,huan2024optimal}. In a conjugate family such as Gamma-Poisson, the predictive is negative binomially distributed but lacks expressiveness in capturing tail probabilities accurately. Outside a conjugate family, the expected information gain must be estimated by nested Monte Carlo, which is computationally expensive and ill-suited for sequential design with short dwell times \citep{rainforth2018nesting,rainforth2024modern}. We stay in a conjugate family, and will use the generalised inverse Gaussian distribution \citep{jorgensen1982statistical} as a prior for the count rate. Its predictive is the Sichel distribution which has an additional parameter to describe tail probabilities \citep{sichel1975distribution,stein1987parameter}.
+
+In active learning the same quantity is BALD \citep{houlsby2011bald}, with maximum entropy sampling \citep{sebastiani2000maximum} dropping the aleatoric term and EPIG \citep{smith2023prediction} the prediction-oriented alternative; it also appears as sensor management \citep{kreucher2005sensor,hero2008information,yu2009active}, source search \citep{vergassola2007infotaxis,hutchinson2018entrotaxis} and astronomical scheduling \citep{loredo2004bayesian}.
+Across that work expected information gain is estimated rather than computed, and those estimators carry a bias no sample size removes \citep{rainforth2024modern}.
+We give a count family in which the quantity they approximate is available directly, taking a mixing law from the classical conjugate analysis of exponential families \citep{diaconis1979conjugate,gutierrez1997exponential,chen2003conjugate} with one parameter more.
+
+%Proposition~\ref{prop:consistency} proves posterior consistency from an exact two-sided bound on a Bessel ratio, its condition falling on accumulated exposure rather than on the number of measurements, and Remark~\ref{rem:dopt} identifies local D-optimality as the leading term of the exact criterion, which predicts when the two must tie.
+
+\section{Problem statement} \label{sec:problem}
+
+Let $y \in \mathbb{N}$ be a set of counts and $\tau \in [0, \infty)$ be a dwell time. There are $K \in \mathbb{N}$ contexts, with context $k$ emitting events at an unknown true rate $\lambda^{*}_k \in [0, \infty)$. A design $u \in \mathcal{U}$ consists of a context $k$ and a dwell time $\tau$. Designs are chosen one at a time, until the time budget is spent. $\mathcal{U}$ is finite, and the set $\mathcal{U}_k \subseteq \mathcal{U}$ of designs at context $k$ is non-empty for every $k$.
+
+There are three metrics of interest. First, data must be acquired such that the average surprisal on the test set is minimal. Let $\mathcal{D}_t = \{(y_i, u_i)\}_{i=1}^{t}$ be the designs selected and counts observed up to time $t$, and $\mathcal{V} = \{(y_j, u_j)\}_{j=1}^{n}$ be a held out test set of designs and counts. The surprisal is calculated as the negative log probability of test data under a posterior predictive distribution:
+\begin{equation}
+	L = \frac{1}{n} \sum_{j \in \mathcal{V}} - \ln p(y_j \given u_j, \mathcal{D}_t) \, .
+\end{equation}
+Secondly, the model must identify as quickly as possible the top-$m$ contexts for which the count rate is maximal. The true top is $S^{*} $, the subset of $\{1, \dots, K\}$ with the $m$ largest true rates $\lambda^{*}_k$.
+The performance of the model in selecting these contexts is expressed in terms of simple regret at specific checkpoints in the experiment. Simple regret is calculated as
+\begin{equation}
+	R_t = 1 - \frac{\sum_{k \in S_t} \lambda_k}{\sum_{k \in S^{*}} \lambda_k} \, ,
+	\label{eq:regret}
+\end{equation}
+where $S_t$ is the set of $m$ largest $\lambda_k$ under the posterior distribution after observing $t$ designs and resulting outputs, $p(\lambda_k \given \mathcal{D}_t)$.
+Lastly, we time models on the computational cost of inference, in terms of average number of seconds to select a new design.
+
+\section{Model specification}
+\label{sec:model}
+
+Counts are modelled as Poisson distributed with rate parameter $\lambda$ and exposure function $f(u)$,
+\begin{equation}
+    p(y \given u, \lambda_k) = \mathcal{P}\big(y \given f(u) \lambda_k \big) \, .
+    \label{eq:likelihood}
+\end{equation}
+
+\begin{assumption}[Multiplicative exposure]
+    \label{as:exposure}
+    The design acts on the rate $\lambda_k$ through a multiplicative scalar $f(u)$, independent of the rate itself.
+\end{assumption}
+The assumption indicates that no rate observable through another. The rates are independent under the prior and the likelihood factorises across contexts, so the rest of this section treats a single context and writes $\lambda$ for its rate.
+
+Our prior distribution for the rate $\lambda$ is the generalised inverse Gaussian (GIG) distribution,
+\begin{equation}
+    \begin{split}
+        p(\lambda) &= \Gig(\lambda \given \nu, a, b) \\
+        &= \frac{(b/a)^{\nu/2}}{2 K_{\nu}(\sqrt{ab})} \lambda^{\nu - 1} \exp\big( -(\frac{a}{\lambda} + b \lambda)/2 \big) \,,
+    \end{split}
+    \label{eq:gig}
+\end{equation}
+%
+with order $\nu \in \mathbb{R}$, scale parameters $a, b > 0$, and $K_{\nu}$ the modified Bessel function of the second kind.
+Its three parameters separate once $(a, b)$ is traded for a scale and a concentration.
+
+\begin{lemma}
+    \label{lem:gig_moments}
+    Let $\eta = \sqrt{a/b}$ and $\omega = \sqrt{ab}$ be the scale and concentration of the GIG distribution, respectively, and $R_{\nu+1}(\omega) = K_{\nu+1}(\omega) / K_{\nu}(\omega)$.
+    Then, for every real $n$, the non-central moments are
+    \begin{equation}
+    		\Ex{p(\lambda)}{\lambda^{n}} = \eta^{n} R_{\nu+n}(\omega) \, ,
+	\end{equation} 
+	and, thus, the mean $\mu$ and variance $V$ of $p(\lambda)$ are, 
+    %
+    \begin{equation}
+        \mu \! = \! \eta R_{\nu+1}(\omega) , \ \ V \! = \! \eta^{2} R_{\nu} (\omega) \big( R_{\nu + 1}(\omega) \! - \! R_{\nu}(\omega) \big) .
+        \label{eq:gig_moments}
+    \end{equation}
+\end{lemma}
+
+These are Eqs.~(2.16), (2.19) and (2.21) of \citet{jorgensen1982statistical}, whose scale, concentration and ratio $R$ we adopt.
+The moments hold because multiplying the kernel of \eqref{eq:gig} by $\lambda^{n}$ gives its kernel at order $\nu + n$, so each is a ratio of two normalising constants.
+Requiring a particular mean fixes $\eta$ in closed form and leaves $\nu$ and $\omega$ free, so the expected count a context and the uncertainty about it are set independently.
+Note that the gamma distribution is a special case of this family. As $\omega \to 0$ with $\nu > 0$, \eqref{eq:gig} tends to a gamma of shape $\nu$ and rate $b/2$.
+
+The Fano factor under this choice of likelihood is
+\begin{equation}
+    F(u) = 1 + f(u) \frac{\Var{p(\lambda)}{\lambda}}{\Ex{p(\lambda)}{\lambda}} \, .
+    \label{eq:fano}
+\end{equation}
+A standard Poisson process has a Fano factor of $1$. Values below $1$ indicate underdispersion while values above indicate overdispersion. Note that the above Fano factor will always be greater than or equal to $1$, which means the multiplicative exposure Poisson likelihood is only suited for overdispersed count data. The exposure function controls the amount of overdispersion. 
+A negative binomial has a free mean and variance, and can also adapt to overdispersion. However, the GIG distribution adds a third parameter so that the Sichel distribution has the capacity to, with the predictive mean and variance held fixed, move probability mass between the centre and the tail (see Lemma~\ref{lem:sichel_tail}). It is thus a strictly more flexible model.
+
+\section{Inference}
+\label{sec:inference}
+
+
+\subsection{Updating parameters}
+\label{sec:inference_update}
+
+Under \eqref{eq:likelihood} and \eqref{eq:gig}, a count $y$ observed at action $u$ yields
+\begin{equation}
+    p(\lambda \given y, u) = \Gig\big(\lambda \given \nu + y, \, a, \, b + 2 f(u) \big) \,. \label{eq:posterior}
+\end{equation}
+Multiplying \eqref{eq:likelihood} by \eqref{eq:gig} and dropping every factor free of $\lambda$ leaves the kernel of \eqref{eq:gig} at the stated parameters.
+The count enters only through the order and the action only through the second scale parameter, additively, so an exposure delivered in one measurement updates the belief exactly as the same exposure split across several.
+The first scale parameter $a$ is never revised, because a Poisson likelihood carries information only through $\lambda^{y} e^{-f(u) \lambda}$ and neither factor has the $1/\lambda$ form that $a$ multiplies, so whatever weight the prior places on very small rates survives counting untouched. Repeating the update for $n$ time steps gives an update of $\nu + \sum_{i=1}^{n} y_i$ and $b + 2 \sum_{i=1}^{n} f(u_i)$, which is free of order.
+
+%Write $F_t = \sum_{i \leq t} f(u_i)$, with the actions adapted, so $u_i$ may depend on everything observed before it.
+The Fisher information up to time $t$ is:
+\begin{equation}
+	F_t = \mathbb{E} \Big[ \frac{\partial}{\partial \lambda} \ln p(y \given u, \lambda_k) \given \lambda \Big] = \sum_{i < t} \frac{f(u_i)}{\lambda} \, .
+\end{equation}
+
+\begin{proposition}[Posterior consistency]
+    \label{prop:consistency}
+    Fix a context with true rate $\lambda^{*} > 0$ and a prior \eqref{eq:gig} with $a, b > 0$ and $\nu \in \mathbb{R}$.
+    Since $F_t$ is non-decreasing it has a limit $F_{\infty} \in (0, \infty]$, and the two cases partition the sample space.
+    On the event $\{F_{\infty} = \infty\}$,
+    %
+    \begin{equation}
+        \Ex{p(\lambda \given \mathcal{D}_t)}{(\lambda - \lambda^{*})^{2}} \longrightarrow 0
+        \label{eq:consistency}
+    \end{equation}
+    %
+    almost surely, so the posterior concentrates at $\lambda^{*}$.
+    Its variance is $O(1/F_t)$, and more precisely
+    %
+    \begin{equation}
+        F_t \, \Var{p(\lambda \given \mathcal{D}_t)}{\lambda} \longrightarrow \lambda^{*}
+        \label{eq:consistency_rate}
+    \end{equation}
+    %
+    almost surely, which is the inverse Fisher information of a Poisson observed at total exposure $F_t$.
+    On the event $\{F_{\infty} < \infty\}$ the posterior converges almost surely to a non-degenerate law and consistency fails.
+\end{proposition}
+
+The proof is in Appendix~\ref{appx:consistency}.
+Its condition falls on accumulated exposure rather than on the number of measurements, so it restricts the design and not the sample size: exposures decaying fast enough to be summable stop learning at a finite spread however many follow.
+This is persistence of excitation in the sense familiar from input design, the Fisher information accumulated being $F_t/\lambda^{*}$ by \eqref{eq:consistency_rate}.
+The unrevised $a$ does not obstruct concentration, entering the proof only through a bracket of width proportional to $a$ and inversely to the accumulated count, and the constant in \eqref{eq:consistency_rate} is the best a Poisson likelihood allows.
+
+\subsection{Posterior predictive distribution}
+\label{sec:inference_predictive}
+
+Because \eqref{eq:posterior} returns the family to itself, $(\nu, a, b)$ denotes the current belief, prior and posterior alike, and the history is dropped from the notation.
+
+\begin{proposition}[Posterior predictive]
+    \label{prop:predictive}
+    Under the belief $\Gig(\lambda \given \nu, a, b)$, the count returned by action $u$ has mass function
+    %
+    \begin{equation}
+        p(y \given u, \mathcal{D}) = \frac{(f(u) \eta_u)^{y}}{y!} \Big( \frac{\eta_u}{\eta} \Big)^{\nu} \frac{K_{\nu + y}(\omega_u)}{K_{\nu}(\omega)} \,,
+        \label{eq:sichel}
+    \end{equation}
+    %
+    where $\eta_u = \sqrt{a / (b + 2 f(u))}$ and $\omega_u = \sqrt{a (b + 2 f(u))}$ are the scale and concentration of Lemma~\ref{lem:gig_moments} for the updated belief.
+\end{proposition}
+
+Equation~\eqref{eq:sichel} is the Sichel law $\Sic$ \citep{sichel1975distribution,stein1987parameter}.
+It is Eq.~(4) of \citet{sichel1973statistical} at unit exposure, and other exposures only rescale the rate.
+Every dependence on the action is carried by $f(u)$ through $(\eta_u, \omega_u)$, so a grid of candidates is scored against a belief computed once; the support is unbounded, so a functional that is not a moment, the entropy in particular, is a truncated sum over it.
+
+%\begin{remark}[An exact form is not an evaluation recipe]
+%    \label{rem:conditioning}
+%    Equation~\eqref{eq:sichel} must not be evaluated as written.
+%    $K_{\nu + y}$ overflows double precision at moderate order, and the order a belief carries is $\nu + \sum_i y_i$, which grows without bound; in Section~\ref{sec:experiments_verification} a direct call overflows after four measurements.
+%    Every quantity is therefore accumulated in logarithms, and the run of orders a support sum needs comes by one of two routes.
+%    The recurrence $K_{\alpha + 1}(z) = K_{\alpha - 1}(z) + (2 \alpha / z) K_{\alpha}(z)$ adds two positive quantities, so nothing cancels, but its rounding compounds, reaching $3 \times 10^{-7}$ after $2 \times 10^{5}$ orders where the uniform asymptotic expansion is still exact.
+%    Short runs take the recurrence and long runs the expansion, and which is needed is set by the weight of the predictive tail.
+%\end{remark}
+
+\subsection{Information gain per action}
+\label{sec:inference_acquisition}
+
+A candidate design is scored by the mutual information between $\lambda$ and $y$ under the current belief \citep{lindley1956measure,houlsby2011bald},
+%
+\begin{align}
+        G(u) &= \mathbb{E}_{p(y \given u, \mathcal{D})} \Big[ D_{\text{KL}}\big[ p(\lambda \given y, u, \mathcal{D}) \,\|\, p(\lambda \given \mathcal{D}) \big] \Big]  \label{eq:eig} \\
+        &= H\big[ p(y | u, \mathcal{D}) \big] - \mathbb{E}_{p(\lambda | \mathcal{D})} \Big[ H\big[ p(y | u, \lambda) \big] \Big] .
+    \label{eq:aleatoric} 
+\end{align}
+%
+
+Under \eqref{eq:likelihood} and \eqref{eq:gig} both terms are integrals against known densities and neither needs a sample: the first is a sum of \eqref{eq:sichel} over the support of the predictive, the second a one-dimensional integral of the Poisson entropy against the belief.
+Neither is closed form, the support being unbounded and the Poisson entropy having no elementary expression, but both are \emph{deterministic}, so \eqref{eq:eig} carries no Monte-Carlo error, no sample size to tune and no nesting bias, which is what an estimator outside a conjugate family must accept \citep{rainforth2018nesting,rainforth2024modern}.
+Both are cheap because the parameter update (Eq.~\ref{eq:posterior}) puts every dependence on the action in $f(u)$ and \eqref{eq:aleatoric} integrates over one positive variable.
+The support sum is sized from \eqref{eq:predictive_mean} and \eqref{eq:predictive_variance} and widened until the tail mass outside meets a tolerance of $10^{-9}$, a normal-tail estimate not being conservative here; the second term is a $64$-node Gauss-Legendre rule in $\log \lambda$.
+Both accumulate in logarithms, for the reason Remark~\ref{rem:conditioning} gives.
+
+%The decomposition in \eqref{eq:eig} separates the criteria compared in Section~\ref{sec:experiments}: EPIG \citep{smith2023prediction}, local D-optimality \citep{chaloner1995bayesian}, Neyman allocation \citep{neyman1992two}, uncertainty sampling in a total and an epistemic form \citep{griffiths2019heteroscedastic}, Thompson sampling, maximum entropy sampling \citep{sebastiani2000maximum}, and the belief-free systematic and random designs.
+%Maximum entropy sampling is \eqref{eq:eig} with $A(u)$ dropped, and a Poisson entropy grows with its mean, roughly as $\tfrac{1}{2}\log(2\pi e f(u) \lambda)$, so dropping $A(u)$ rewards an action for the noise it collects instead of the uncertainty it removes.
+
+\begin{remark}[What a two-moment surrogate can and cannot see]
+    \label{rem:dopt}
+    Local D-optimality scores an action by $\log(1 + f(u) \Var{}{\lambda} / \Ex{}{\lambda})$, the log of the Fano factor \eqref{eq:fano}, so it reads the belief through one scalar.
+    Carrying that approximation into both terms of \eqref{eq:eig} gives
+    %
+    \begin{equation}
+        G(u) = \tfrac{1}{2} \log\big( 1 + f(u) \Var{}{\lambda} / \Ex{}{\lambda} \big) + c + o(1)
+        \label{eq:dopt_limit}
+    \end{equation}
+    %
+    as $f(u) \Ex{}{\lambda} \to \infty$, with $c = \tfrac{1}{2}( \log \Ex{}{\lambda} - \Ex{}{\log \lambda} ) - \Delta$ and $\Delta$ the entropy deficit of the predictive against a Gaussian of its variance.
+    The first term is the D-optimality score exactly and $c$ depends on the belief but not the action, so the two are an affine transform of one another along the exposure axis: contexts whose priors share a shape share $c$ and are ranked identically by both, whatever their means and variances.
+    Numerically $\Delta$ varies little across shapes, so $c$ moves almost entirely through the log-mean-minus-mean-log gap, a dispersion on the log scale the Fano factor cannot see.
+\end{remark}
+
+\subsection{Selecting a design}
+\label{sec:inference_policy}
+
+The criterion \eqref{eq:eig} ranks actions but does not say what to do, because actions differ in what they cost: a budget spent in gravel or telescope time is not one counted in measurements, and criteria compared at equal numbers of measurements would favour whichever asks for the largest sample.
+We therefore score an action by the information expected per unit of budget consumed, and act greedily,
+%
+\begin{equation}
+    u_{t + 1} \in \operatorname*{arg\,max}_{u \in \mathcal{U}} \; \frac{G(u)}{c(u)} \,,
+    \label{eq:policy}
+\end{equation}
+%
+where $c(u) > 0$ is what the action costs.
+We evaluate \eqref{eq:policy} over the grid of contexts and exposures, take the winner, update that context's belief by Proposition~\ref{prop:update} and repeat; the same normalisation is applied to every criterion in Section~\ref{sec:experiments}, ours included.
+Because the belief factorises an observation leaves the other $K - 1$ contexts untouched, so a step costs one update and $|\mathcal{V}|$ scores against the $K |\mathcal{V}|$ a naive implementation would pay.
+The rule is greedy over one step, which nothing above requires; we take it because every criterion in Section~\ref{sec:experiments} is greedy in the same way.
+
+\section{Properties}
+\label{sec:properties}
+
+Write $\bar{F}(y) = p(Y \geq y \given u, \mathcal{D})$ for the predictive tail probability of \eqref{eq:sichel}, and $\bar{F}_{\Gamma}$ for that of the negative binomial obtained from a gamma prior of shape $r$ and rate $\beta$.
+
+\begin{lemma}[Tail of the Sichel law]
+    \label{lem:sichel_tail}
+    Let the belief be $\Gig(\lambda \given \nu, a, b)$ with $a, b > 0$, let $f = f(u) > 0$, and let $q = 2f / (b + 2f)$.
+    \begin{enumerate}
+        \item[(i)] As $y \to \infty$, $\bar{F}(y) = C \, y^{\nu - 1} q^{y} \big(1 + o(1)\big)$, with $C = (2/((b + 2f)\eta))^{\nu} / (2 (1 - q) K_{\nu}(\omega))$. The negative binomial has the same form with exponent $r - 1$ and rate $q_{\Gamma} = f / (\beta + f)$.
+        \item[(ii)] If the gamma prior has the mean and variance of the belief, so that both predictives have the same mean and variance at every exposure, then $q > q_{\Gamma}$. Hence $\bar{F}(y) / \bar{F}_{\Gamma}(y) \to \infty$, at the exponential rate $\log(q / q_{\Gamma})$, and yet $\bar{F}(y) < \bar{F}_{\Gamma}(y)$ for some $y \geq 1$.
+        \item[(iii)] If both beliefs are then updated with the same data, of total exposure $F$, the rates become $q_F = 2f/(b + 2F + 2f)$ and $q_{\Gamma, F} = 2f / (2\beta + 2F + 2f)$, so the counts do not enter the gap at all and
+        \begin{equation*}
+            \log \frac{q_F}{q_{\Gamma, F}} = \log \Big( 1 + \frac{2\beta - b}{b + 2F + 2f} \Big) = O(1/F) \,.
+        \end{equation*}
+    \end{enumerate}
+\end{lemma}
+
+The proof is in Appendix~\ref{appx:sichel_tail}.
+Part (ii) shows that a negative binomial matched to the first two moments underestimates the probability of an extreme count by a factor that grows exponentially in the threshold, and overestimates it at some moderate threshold, so its error changes sign rather than being a bias in one direction.
+The decay rate is set by $b$ alone, the order only sets the polynomial factor, and $a$ only enters the constant.
+When $b$ is small, the asymptotic form takes over only beyond $y \approx 2f/b$, and below that the tail falls like a power law.
+Part (iii) shows that the advantage is largest where little exposure has been spent, and that it is used up by exposure, not by the counts observed.
+
+\subsection{Every context is sampled}
+\label{sec:properties_coverage}
+
+\begin{proposition} 
+    \label{prop:starvation}
+    Let $f(u) > 0$ and $c(u) > 0$ for every design $u \in \mathcal{U}$. For a GIG prior distribution over each context $k$, with $a_k, b_k > 0$ and $\nu_k \in \mathbb{R}$, the policy \eqref{eq:policy} visits every context infinitely often as $t \rightarrow \infty$.
+\end{proposition}
+
+The proof is in Appendix~\ref{appx:starvation}.
+It rests on the bound $G(u) < 2 f(u) / b_{k,t}$ for $u \in \mathcal{U}_k$, with $b_{k,t} = b_k + 2 F_{k,t}$ the second scale parameter of context $k$ after $t$ steps.
+Each selection raises $b_{k,t}$, so the scores of a context that keeps being selected vanish, while those of a context left alone stay fixed and positive.
+The argument needs only a score that depends on the belief at the context of $u$ alone and lies in $(0, f(u) V / \mu]$, so it covers local D-optimality as well.
+It does not extend to maximum entropy sampling, whose score at a well-measured context tends to a Poisson entropy rather than to zero.
+
+\subsection{Simple regret}
+\label{sec:properties_regret}
+
+Write $d(x, \lambda) = x \log(x / \lambda) - x + \lambda$ for the relative entropy of a Poisson law of mean $x$ from one of mean $\lambda$, and
+%
+\begin{equation}
+    \delta_k(x) = \nu_k + \frac{a_k}{2x} - \frac{b_k x}{2}
+    \label{eq:prior_counts}
+\end{equation}
+%
+for what the prior of context $k$ is worth in counts at rate $x$.
+The posterior mean of context $k$ exceeds $x$ whenever $T_{k,t} + \delta_k(x) \geq x F_{k,t}$, where $T_{k,t}$ is the count accumulated at context $k$ (Lemma~\ref{lem:mean_bounds}).
+
+\begin{proposition}[Simple regret]
+    \label{prop:regret}
+    Let each context carry an independent prior \eqref{eq:gig} with $a_k, b_k > 0$, let the counts follow \eqref{eq:likelihood} at true rates $\lambda^{*}_k > 0$, and let $S_t$ in \eqref{eq:regret} hold the $m$ contexts of largest posterior mean $\mu_{k,t}$.
+    Let a design choose each $u_{s+1}$ from the past, possibly with independent randomisation, and stop at a bounded stopping time $t$ with $F_{k,t} \geq \phi_k$ for every $k$ on every sample path.
+    Then for every $i \in S^{*}$, $j \notin S^{*}$ and $x \in (\lambda^{*}_j, \lambda^{*}_i)$,
+    %
+    \begin{equation}
+        \begin{split}
+            \Pr(\mu_{j,t} \geq \mu_{i,t}) \leq{} & \Big( \frac{x}{\lambda^{*}_i} \Big)^{\delta_i(x)} \exp\big( -\phi_i \, d(x, \lambda^{*}_i) \big) \\
+            & + \Big( \frac{x}{\lambda^{*}_j} \Big)^{\delta_j(x) + \epsilon_j} \exp\big( -\phi_j \, d(x, \lambda^{*}_j) \big) \,,
+        \end{split}
+        \label{eq:misranking}
+    \end{equation}
+    %
+    with $\epsilon_j = \max(\tfrac{1}{2}, -\nu_j)$.
+    With $\Lambda^{*} = \sum_{k \in S^{*}} \lambda^{*}_k$ the regret satisfies
+    %
+    \begin{equation}
+        \mathbb{E}[R_t] \leq \frac{1}{\Lambda^{*}} \sum_{i \in S^{*}} \sum_{j \notin S^{*}} (\lambda^{*}_i - \lambda^{*}_j) \Pr(\mu_{j,t} \geq \mu_{i,t}) \,.
+        \label{eq:regret_bound}
+    \end{equation}
+\end{proposition}
+
+\begin{corollary}[Gamma-Poisson]
+    \label{cor:regret_gamma}
+    Under gamma priors of shape $\nu_k > 0$ and rate $b_k / 2$, the limit $a_k \to 0$ of \eqref{eq:gig}, Proposition~\ref{prop:regret} holds with $a_k = 0$ in \eqref{eq:prior_counts} and $\epsilon_j = 0$.
+\end{corollary}
+
+The proofs are in Appendix~\ref{appx:regret}.
+The bound follows each count through an exponential martingale, so it holds for adaptive designs but needs the exposures guaranteed on every path.
+A design fixed in advance has them, whereas Proposition~\ref{prop:starvation} makes every exposure of the rule \eqref{eq:policy} diverge but gives no explicit floor at a finite budget.
+The exponents depend on the true rates and the exposures alone.
+For equal exposures the best $x$ balances them at the logarithmic mean $(\lambda^{*}_i - \lambda^{*}_j) / \log(\lambda^{*}_i / \lambda^{*}_j)$, and a grid over $x$ attains the Chernoff exponent of the pair, at most twice as large, at the cost of a prefactor linear in the exposure (Remark~\ref{rem:chernoff}).
+
+At equal exposures the GIG and gamma bounds therefore share their exponents and differ only in their prefactors, by factors that do not depend on the budget.
+Relative to a gamma prior with the same $\nu_k > 0$ and $b_k$, the GIG prior adds $a_k / (2x)$ counts, which raise every posterior mean.
+This shrinks the first term of \eqref{eq:misranking}, for the context that belongs in the top $m$, and inflates the second.
+The shift $\epsilon_j$ comes from bracketing the GIG posterior mean, whose inverse in the count has no closed form, and not from the model.
+
+\section{Experiments}
+\label{sec:experiments}
+
+We perform three experiments. The first, counting diamonds, represents the advantage the GIG-Poisson model has in a correctly specified setting. The second, counting photons, is taken from actual data and is not guaranteed to be correctly specified.
+
+We compare against four baselines, each selecting designs by \eqref{eq:policy} with the same cost normalisation as ours.
+The first replaces \eqref{eq:gig} by its gamma boundary, which makes the predictive negative binomial and keeps expected information gain exact.
+The second is the non-conjugate route: a skew-normal prior on $\log \lambda$, with as many parameters as \eqref{eq:gig}, whose posterior is represented by $2048$ Markov chains taking $30$ Metropolis-Hastings steps after every observation, and whose expected information gain is estimated by nested Monte Carlo with $N = M = 1024$ \citep{rainforth2018nesting}.
+The last two are Bayesian optimisation by expected improvement on a Gaussian process over the log-rates, with a Poisson likelihood and a Laplace approximation to the posterior; one uses a squared-exponential kernel over the prior mean and dispersion of each source, the other a categorical kernel over source class, and both learn their kernel hyperparameters by marginal likelihood.
+Expected improvement scores a source but not a dwell time, so the exposure enters as a fidelity factor, the fraction of the latent variance an observation of that exposure is expected to remove.
+Computational cost is the wall-clock time of selecting a design plus updating the belief, averaged over rounds, with $12$ episodes running concurrently on one machine.
+\claude{Citations to add to the Zotero library: skew-normal distribution (Azzalini, 1985); expected improvement (Jones, Schonlau and Welch, 1998); Laplace approximation for GP classification (Rasmussen and Williams, 2006, Sec.~3.4).}
+
+\begin{figure*}[thb]
+	\centering
+	\includegraphics[width=.32\textwidth]{figures/bulk_nlpd_box}
+	\includegraphics[width=.32\textwidth]{figures/gamma_nlpd_box}
+	\includegraphics[width=.32\textwidth]{figures/hardx_nlpd_box}
+	\caption{}
+	\label{}
+\end{figure*}
+
+\subsection{Counting diamonds} \label{eq:exp_diamonds}
+This experiment follows the set up initially described by \citet{sichel1973statistical}, namely bulk sampling of diamonds in marine deposits. Consider land property divided into $K =12 $ blocks. Each block carries an unknown density of diamonds. A design corresponds to a choice of block and the volume of soil to sample expressed in cubic metres. The data is generated according to a GIG-Poisson model and serves as a verification experiment. Given $a_k = $, $b_k = $, a $\lambda_k$ is drawn from the GIG distribution. The exposure function $f(u) = \tau*r_k$ is the sample volume times a randomly sampled recovery rate $r_k \sim \mathcal{U}(0.55, 0.98)$. Diamond counts are then sampled from the Poisson distribution with the sampled rate block times the exposure function for each block. The experimental budget is $240 m^3$. 
+
+Figure \ref{fig:} reports the results. 
+%\begin{figure}
+%	\includegraphics[width=\linewidth]{}
+%\end{figure}
+
+\subsection{Counting photons} \label{sec:exp_photons}
+This experiment allocates telescope time across gamma-ray sources, and its rates are measured rather than simulated.
+They are the integral photon fluxes above $1$ GeV of the sources in the Fermi-LAT fourth source catalogue \citep{abdollahi2020fermi}, restricted to the $1$st to $99$th percentile of flux: the faint end lies at the detection threshold, where the catalogue is incomplete, and a handful of very bright sources would otherwise absorb any budget.
+A design $u = (k, \tau)$ points the telescope at source $k$ for a dwell time $\tau \in \{0.5, 1, 2.5, 5, 10, 25\}$ Ms, with exposure $f(u) = A \tau$ and $A = 8000$ cm$^2$, the order of the effective area of the Large Area Telescope above $1$ GeV.
+Photon counts are Poisson with rate $f(u) \lambda^{*}_k$, so \eqref{eq:likelihood} is the measurement process itself, but no model in the comparison generated the rates.
+
+Priors are conditioned on source class, since an observer knows what kind of object a target is before pointing at it.
+The catalogue is split in half within each of five classes: pulsars, flat-spectrum radio quasars, BL Lacertae objects, blazars of uncertain type, and unassociated sources, the last also holding the rarer classes.
+Every model fits its prior to one half by maximum likelihood in its own parameters, and the sources of an episode are drawn from the other half, so a model knows the population of a class but nothing about the source in front of it.
+The fitted GIG order is negative in four of the five classes, between $-0.8$ and $-2.6$, where no gamma distribution can follow.
+An episode draws $K = 192$ sources, cycling over the classes, which share a budget of $120$ Ms, enough to observe only part of the list well.
+The average surprisal is computed on $24$ held-out counts per source at a dwell time of $25$ Ms, the counts a deep follow-up observation would record, and simple regret for $m = 1, \dots, 5$ at $15$, $30$, $60$, $90$ and $120$ Ms.
+Photons are shared exactly between methods: the photons of a source form one realised Poisson process in exposure and an observation consumes the next $f(u)$ of it, so two methods that spend the same time on the same source record the same counts.
+The experiment is repeated for $50$ episodes.
+
+Figures~\ref{fig:photon_nlpd}, \ref{fig:photon_regret} and \ref{fig:photon_cost} report the results.
+The GIG-Poisson model reaches an average surprisal of $5.367$ nats against $5.512$ for the gamma-Poisson model, a difference of $0.146$ nats that holds in every one of the $50$ episodes (paired $t = 26.8$).
+The log-skew-normal model is indistinguishable from ours on surprisal ($5.365$ nats, $t = 0.7$) but costs an order of magnitude more per round, nearly all of it in the nested estimate.
+\claude{Per-round times in the result files come from separate invocations under different machine load (485 and 1092 ms for the same log-skew-normal agent); quote times from the dedicated timing run once it exists.}
+Bayesian optimisation is worst on surprisal, at $5.68$ and $5.69$ nats for the two kernels, because expected improvement concentrates the budget on the brightest candidates: it observes $60$ per cent of the sources against $85$ per cent for our method.
+The same concentration gives it the lowest top-$1$ regret, $0.001$ against $0.014$ for ours, and the highest top-$4$ and top-$5$ regret, $0.023$ and $0.027$ against $0.008$ and $0.009$.
+The three methods that select by expected information gain do not differ in top-$m$ regret for any $m$ ($|t| \leq 1.9$).
+The margin over the gamma-Poisson model grows with the number of sources the budget must cover and with the dwell time at which predictions are scored, as fewer sources are measured well enough for the data to override the prior: with $K = 48$ sources scored at $5$ Ms it is $0.064$ nats.
+
+\subsection{Counting hard X-ray photons} \label{sec:exp_xray}
+This experiment schedules hard X-ray follow-up of sources detected by the Burst Alert Telescope (BAT) on the Swift satellite, a different sky, instrument and population from the previous one.
+The rates are the $14$ to $195$ keV fluxes of the $1632$ sources of the Swift-BAT 105-month all-sky survey, most of them active galactic nuclei, again restricted to the $1$st to $99$th percentile of flux.
+A design $u = (k, \tau)$ points a focusing hard X-ray telescope at source $k$ for $\tau \in \{0.5, 1, 2.5, 5, 10, 25\}$ ks, with exposure $f(u) = C \tau$.
+The constant $C = 3.1$ converts a catalogue flux in units of $10^{-12}$ erg cm$^{-2}$ s$^{-1}$ into detected counts per kilosecond, and corresponds to the band above $20$ keV of a telescope like NuSTAR: for a power law of photon index $1.8$, about $16$ per cent of the $3$ to $79$ keV photons arrive above $20$ keV, where the effective area is roughly half its peak, so about a tenth of the $31$ counts per kilosecond such a telescope records over its full band.
+A snapshot of $0.5$ ks of a median source then records about $22$ counts, ten times as many as in the gamma-ray experiment.
+Each observation is therefore far more informative, which moves the problem away from the one before in two ways: the prior is overridden sooner, and the likelihood of a single observation is much narrower than the prior.
+
+Priors are again conditioned on source class, split in half within each of six classes: Seyfert~1 galaxies (types 1 to 1.5), Seyfert~2 galaxies (types 1.8 to 2), beamed active galactic nuclei, X-ray binaries, cataclysmic variables, and the unidentified sources together with the rarer classes.
+The fitted GIG order is negative in all six, between $-0.6$ and $-3.5$.
+This is expected of a flux-limited survey of sources distributed through space, whose number counts follow a power law in flux: a GIG of negative order has a power-law tail, which a gamma distribution cannot have.
+An episode draws $K = 192$ sources sharing a budget of $120$ ks, the average surprisal is computed on $24$ held-out counts per source at $20$ ks, simple regret for $m = 1, \dots, 5$ at $15$, $30$, $60$, $90$ and $120$ ks, and photons are shared between methods as before.
+The experiment is repeated for $50$ episodes.
+
+Figures~\ref{fig:xray_nlpd}, \ref{fig:xray_regret} and \ref{fig:xray_cost} report the results.
+The GIG-Poisson model leads the gamma-Poisson model by $0.353$ nats at $15$ ks, while most sources are still unobserved, and by $0.061$ nats at $120$ ks, when every source has been observed ($6.663$ against $6.724$ nats, paired $t = 15.2$), and it is ahead in all $50$ episodes at both budgets.
+The log-skew-normal model matches ours at every budget ($6.666$ nats at $120$ ks, $t = 0.8$), although its nested estimate of the information gain is badly biased in this regime: when an observation carries tens of counts, few inner samples fall where the observed count is likely, and at a dwell time of $25$ ks the estimate is $17.1$ nats against an exact $3.1$.
+Even so, its predictions do not suffer measurably, and neither do those of the same model with an inner sample eight times larger or with the information gain computed exactly by quadrature.
+Bayesian optimisation observes $17$ per cent of the sources and stops improving after $30$ ks, ending at $7.89$ and $7.90$ nats with top-$5$ regret $0.020$ against $0.0003$ for ours.
+The three methods that select by expected information gain reach near-zero top-$m$ regret by $60$ ks and do not differ from each other.
+The exact information gain is not cheap in this regime: its predictive sum runs over a support that grows with the expected count, and it costs about twice as much per round as the nested estimate, whose cost does not depend on the counts.
+\claude{The per-round times (about 1.5 s for GIG-Poisson, 0.75 s for log-skew-normal, 6 ms for gamma-Poisson) are from one invocation with 12 episodes running concurrently; replace with the dedicated timing run.}
+
+\section{Discussion}
+\label{sec:discussion}
+
+
+
+\section{Conclusion}
+\label{sec:conclusion}
+
+
+
+\subsection*{AI use statement}
+
+(This section is \textbf{required} and does not count toward the page limit.)
+
+\wmk{Draft only. What follows is limited to AI use this repository actually records, namely drafting and revising the text and checking reported numbers against the result files. You must decide and state the rest before submission, in particular research ideation, the derivations of Section~\ref{sec:inference} and Appendix~\ref{appx:consistency}, and the experiment code. Check the categories against the AISTATS 2027 AI Policy for Authors, since required and recommended disclosure cover different tasks.}
+
+In this work, we used generative AI tools to draft and revise the text of this manuscript, and to check the numbers reported here against the recorded outputs of the experiments.
+[State here whether generative AI was used for research ideation, for the derivations of Section~\ref{sec:inference} and Appendix~\ref{appx:consistency}, and for the experiment code, together with how that work was verified.]
+We have reviewed all AI-assisted work.
+We take responsibility for the final content of this work, including text, claims, or artifacts produced with the aid of generative AI.
+
+\bibliography{references}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\clearpage
+\newpage
+\section*{Checklist}
+
+\begin{enumerate}
+
+  \item For all models and algorithms presented, check if you include:
+  \begin{enumerate}
+    \item A clear description of the mathematical setting, assumptions, algorithm, and/or model. [Yes/No/Not Applicable]
+    \item An analysis of the properties and complexity (time, space, sample size) of any algorithm. [Yes/No/Not Applicable]
+    \item (Optional) Anonymized source code, with specification of all dependencies, including external libraries. [Yes/No/Not Applicable]
+  \end{enumerate}
+
+  \item For any theoretical claim, check if you include:
+  \begin{enumerate}
+    \item Statements of the full set of assumptions of all theoretical results. [Yes/No/Not Applicable]
+    \item Complete proofs of all theoretical results. [Yes/No/Not Applicable]
+    \item Clear explanations of any assumptions. [Yes/No/Not Applicable]     
+  \end{enumerate}
+
+  \item For all figures and tables that present empirical results, check if you include:
+  \begin{enumerate}
+    \item The code, data, and instructions needed to reproduce the main experimental results (either in the supplemental material or as a URL). [Yes/No/Not Applicable]
+    \item All the training details (e.g., data splits, hyperparameters, how they were chosen). [Yes/No/Not Applicable]
+    \item A clear definition of the specific measure or statistics and error bars (e.g., with respect to the random seed after running experiments multiple times). [Yes/No/Not Applicable]
+    \item A description of the computing infrastructure used. (e.g., type of GPUs, internal cluster, or cloud provider). [Yes/No/Not Applicable]
+  \end{enumerate}
+
+  \item If you are using existing assets (e.g., code, data, models) or curating/releasing new assets, check if you include:
+  \begin{enumerate}
+    \item Citations of the creator If your work uses existing assets. [Yes/No/Not Applicable]
+    \item The license information of the assets, if applicable. [Yes/No/Not Applicable]
+    \item New assets either in the supplemental material or as a URL, if applicable. [Yes/No/Not Applicable]
+    \item Information about consent from data providers/curators. [Yes/No/Not Applicable]
+    \item Discussion of sensible content if applicable, e.g., personally identifiable information or offensive content. [Yes/No/Not Applicable]
+  \end{enumerate}
+
+  \item If you used crowdsourcing or conducted research with human subjects, check if you include:
+  \begin{enumerate}
+    \item The full text of instructions given to participants and screenshots. [Yes/No/Not Applicable]
+    \item Descriptions of potential participant risks, with links to Institutional Review Board (IRB) approvals if applicable. [Yes/No/Not Applicable]
+    \item The estimated hourly wage paid to participants and the total amount spent on participant compensation. [Yes/No/Not Applicable]
+  \end{enumerate}
+
+\end{enumerate}
+
+\clearpage
+\appendix
+\thispagestyle{empty}
+
+% Supplementary material: To improve readability, you must use a single-column format for the supplementary material.
+\onecolumn
+\aistatstitle{Sequential experimental design for overdispersed counts\\ with an exact Sichel predictive:\\ Supplementary Materials}
+
+\section{Proof of Posterior Consistency}
+\label{appx:consistency}
+
+Throughout, one context is fixed and its rate is written $\lambda$, with true value $\lambda^{*} > 0$.
+Let $\mathcal{F}_{t}$ be the filtration generated by $(u_1, y_1, \dots, u_t, y_t)$ and let the policy be adapted, so that $u_{i}$ is $\mathcal{F}_{i-1}$-measurable and may depend on everything observed before step $i$.
+Write $f_i = f(u_i)$, and
+%
+\begin{equation*}
+    T_t = \sum_{i \leq t} y_i \,, \qquad F_t = \sum_{i \leq t} f_i \,, \qquad \nu_t = \nu + T_t \,, \qquad b_t = b + 2 F_t \,,
+\end{equation*}
+%
+so that the posterior is $\Gig(\lambda \given \nu_t, a, b_t)$ by repeated use of \eqref{eq:posterior}.
+A subscript $t$ marks the quantities of Lemma~\ref{lem:gig_moments} under this posterior, such as $\eta_t$, $\omega_t$, $\mu_t$ and $V_t$, so everything below is a statement about the ratio $R$.
+
+\subsection{A Bracket on the Bessel Ratio}
+
+The proof needs no asymptotic expansion of $K$.
+An exact two-sided bound follows from the recurrence alone, and it is the only property of the Bessel functions used.
+
+\begin{lemma}
+    \label{lem:bessel_bracket}
+    For every $z > 0$ and every real $\alpha$,
+    %
+    \begin{equation}
+        R_{\alpha}(z) > \frac{2\alpha}{z} \,,
+        \label{eq:bracket_lower}
+    \end{equation}
+    %
+    and if in addition $\alpha > 1$,
+    %
+    \begin{equation}
+        R_{\alpha}(z) < \frac{2\alpha}{z} + \frac{z}{2(\alpha - 1)} \,.
+        \label{eq:bracket_upper}
+    \end{equation}
+\end{lemma}
+
+\begin{proof}
+    By Eqs.~(A.15) and (A.16) of \citet{jorgensen1982statistical}, the ratio satisfies the exact recursion
+    %
+    \begin{equation}
+        R_{\alpha}(z) = \frac{2\alpha}{z} + \frac{1}{R_{\alpha - 1}(z)} \,,
+        \label{eq:ratio_recursion}
+    \end{equation}
+    %
+    valid for every real $\alpha$.
+    As $K_{\alpha}$ is strictly positive on $(0, \infty)$ for every real order, $R_{\alpha - 1}(z) > 0$, so the second term of \eqref{eq:ratio_recursion} is strictly positive and \eqref{eq:bracket_lower} follows.
+    Applying \eqref{eq:bracket_lower} at order $\alpha - 1$, which is a positive lower bound exactly when $\alpha > 1$, gives $R_{\alpha - 1}(z) > 2(\alpha - 1)/z$ and hence $1/R_{\alpha - 1}(z) < z / 2(\alpha - 1)$.
+    Substituting into \eqref{eq:ratio_recursion} gives \eqref{eq:bracket_upper}.
+\end{proof}
+
+\subsection{A Law of Large Numbers for the Accumulated Count}
+
+\begin{lemma}
+    \label{lem:lln}
+    On the event $\{F_t \to \infty\}$, $T_t / F_t \to \lambda^{*}$ almost surely, and $\nu_t \to \infty$.
+\end{lemma}
+
+\begin{proof}
+    Under $\lambda^{*}$ the conditional law of $y_i$ given $\mathcal{F}_{i - 1}$ is Poisson with mean $f_i \lambda^{*}$, since $f_i$ is $\mathcal{F}_{i-1}$-measurable.
+    Hence $M_t = T_t - \lambda^{*} F_t$ is a square-integrable martingale with predictable quadratic variation
+    %
+    \begin{equation*}
+        \langle M \rangle_t = \sum_{i \leq t} \Var{}{y_i \given \mathcal{F}_{i-1}} = \lambda^{*} F_t \,.
+    \end{equation*}
+    %
+    On $\{F_t \to \infty\}$ we have $\langle M \rangle_{\infty} = \infty$, so the strong law for square-integrable martingales gives $M_t / \langle M \rangle_t \to 0$ almost surely, that is $T_t / F_t \to \lambda^{*}$.
+    Since $\lambda^{*} > 0$ and $F_t \to \infty$, also $T_t \to \infty$ and therefore $\nu_t = \nu + T_t \to \infty$.
+\end{proof}
+
+The adaptivity of the policy is handled entirely by this lemma, and it is the only place it is needed.
+Nothing later distinguishes a sequential design from one fixed in advance.
+
+\subsection{Proof of Proposition~\ref{prop:consistency}}
+
+\begin{proof}
+    Work first on $\{F_{\infty} = \infty\}$, intersected with the almost sure event of Lemma~\ref{lem:lln}, on which $\nu_t \to \infty$ and so $\nu_t > 1$ for all large $t$.
+
+    \paragraph{The posterior mean.}
+    Applying Lemma~\ref{lem:bessel_bracket} at $\alpha = \nu_t$ and $z = \omega_t$ to $\mu_t = \eta_t R_{\nu_t}(\omega_t)$, and simplifying with the identities of Lemma~\ref{lem:gig_moments},
+    %
+    \begin{equation}
+        \frac{2 \nu_t}{b_t} \; < \; \mu_t \; < \; \frac{2 \nu_t}{b_t} + \frac{a}{2 (\nu_t - 1)} \,.
+        \label{eq:mean_bracket}
+    \end{equation}
+    %
+    The width of the bracket is $a / 2(\nu_t - 1) \to 0$, and the leading term satisfies
+    %
+    \begin{equation}
+        \frac{2 \nu_t}{b_t} = \frac{2 F_t}{b + 2 F_t} \cdot \frac{\nu + T_t}{F_t} \longrightarrow 1 \cdot \lambda^{*}
+        \label{eq:mean_limit}
+    \end{equation}
+    %
+    by Lemma~\ref{lem:lln}.
+    Hence the posterior mean converges to $\lambda^{*}$ almost surely.
+    Note that the first scale parameter $a$ appears nowhere except in the width of \eqref{eq:mean_bracket}, which is the formal content of the observation that $a$ is never revised and never needs to be.
+
+    \paragraph{The posterior variance.}
+    By \eqref{eq:gig_moments}, $V_t = \eta_t^{2} R_{\nu_t}(R_{\nu_t + 1} - R_{\nu_t})$, with the argument $\omega_t$ suppressed.
+    Applying \eqref{eq:ratio_recursion} at orders $\nu_t + 1$ and $\nu_t$ and discarding the negative term $-1/R_{\nu_t - 1}$,
+    %
+    \begin{equation*}
+        R_{\nu_t + 1} - R_{\nu_t} = \frac{2}{\omega_t} + \frac{1}{R_{\nu_t}} - \frac{1}{R_{\nu_t - 1}} < \frac{2}{\omega_t} + \frac{\omega_t}{2 \nu_t} \,,
+    \end{equation*}
+    %
+    where \eqref{eq:bracket_lower} bounds $1 / R_{\nu_t}$.
+    Combining this with \eqref{eq:bracket_upper} for $R_{\nu_t}$ and expanding the product gives
+    %
+    \begin{equation}
+        V_t \; < \; \frac{4 \nu_t}{b_t^{2}} + \frac{a}{b_t} \Big( 1 + \frac{1}{\nu_t - 1} \Big) + \frac{a^{2}}{4 \nu_t (\nu_t - 1)} \,.
+        \label{eq:variance_bound}
+    \end{equation}
+    %
+    By Lemma~\ref{lem:lln}, $\nu_t / F_t \to \lambda^{*}$ and $b_t / F_t \to 2$, so the first term of \eqref{eq:variance_bound} is asymptotic to $\lambda^{*} / F_t$, the second is of order $1/F_t$ and the third of order $1/F_t^{2}$.
+    The posterior variance is therefore $O(1/F_t)$ and vanishes.
+
+    \paragraph{Concentration.}
+    The posterior mean-squared error decomposes as $\Ex{p(\lambda \given \mathcal{D}_t)}{(\lambda - \lambda^{*})^{2}} = V_t + (\mu_t - \lambda^{*})^{2}$, and both terms vanish almost surely by the two paragraphs above, which is \eqref{eq:consistency}.
+    Concentration follows by Chebyshev's inequality, since for any $\epsilon > 0$,
+    %
+    \begin{equation*}
+        p\big( |\lambda - \lambda^{*}| > \epsilon \given \mathcal{D}_t \big) \leq \epsilon^{-2} \Ex{p(\lambda \given \mathcal{D}_t)}{(\lambda - \lambda^{*})^{2}} \longrightarrow 0 \,.
+    \end{equation*}
+    %
+    The sharper statement \eqref{eq:consistency_rate} needs a finer bound on the same ratio and is proved in Appendix~\ref{appx:consistency_constant}.
+
+    \paragraph{The converse.}
+    Work now on $\{F_{\infty} < \infty\}$.
+    Then $\sum_{i} \Pr(y_i > 0 \given \mathcal{F}_{i-1}) = \sum_{i} (1 - \exp(-f_i \lambda^{*})) \leq \lambda^{*} F_{\infty} < \infty$, so by the conditional Borel--Cantelli lemma only finitely many observations are nonzero almost surely.
+    Hence $T_t \to T_{\infty} < \infty$, and the posterior converges to $\Gig(\lambda \given \nu + T_{\infty}, a, b + 2 F_{\infty})$, which has strictly positive variance because $b + 2F_\infty < \infty$.
+    The posterior does not concentrate, at any $\lambda^{*}$.
+\end{proof}
+
+\subsection{The Constant in the Rate}
+\label{appx:consistency_constant}
+
+Bound \eqref{eq:variance_bound} gives the order $1/F_t$ but not the sharp constant, because its second term contributes at the same order as the first.
+The looseness is an artefact of bracketing $R_{\nu_t}$ and $R_{\nu_t + 1} - R_{\nu_t}$ separately, when the variance is a difference of two nearly equal quantities.
+Substituting \eqref{eq:ratio_recursion} into itself once more sharpens \eqref{eq:bracket_upper} to
+%
+\begin{equation}
+    R_{\alpha}(z) = \frac{2\alpha}{z} + \frac{z}{2(\alpha - 1)} + O(z^{3}/\alpha^{3}) \,,
+    \label{eq:ratio_expansion}
+\end{equation}
+%
+uniformly as $\alpha / z \to \infty$, which holds here because $\nu_t / \omega_t$ grows like $\lambda^{*} \sqrt{F_t / 2a}$.
+The correction term must be kept at $\alpha - 1$ rather than $\alpha$, since the two differ by $O(z/\alpha^{2})$ and that is larger than $O(z^{3}/\alpha^{3})$ in this regime.
+Differencing \eqref{eq:ratio_expansion} at consecutive orders cancels the correction to leading order, because $z/2\alpha - z/2(\alpha - 1) = -z / 2\alpha(\alpha - 1)$, and leaves $R_{\nu_t + 1} - R_{\nu_t} = 2/\omega_t + O(\omega_t / \nu_t^{2})$.
+Hence
+%
+\begin{equation}
+    F_t V_t = \frac{4 \nu_t F_t}{b_t^{2}} \big( 1 + o(1) \big) \longrightarrow \lambda^{*} \,,
+    \label{eq:variance_rate}
+\end{equation}
+%
+which is the inverse Fisher information of a Poisson observed at total exposure $F_t$ and proves \eqref{eq:consistency_rate}.
+Simulation agrees.
+Across true rates $\lambda^{*} \in \{0.2, 3, 50\}$, orders $\nu \in \{-3, -0.5, 2\}$ and a prior mean deliberately set to $1$ in every case, the ratio $F_t V_t / \lambda^{*}$ reaches $1.000$ to $1.007$ by $F_t = 10^{5}$.
+
+\section{Proof of Proposition~\ref{prop:starvation}}
+\label{appx:starvation}
+
+\begin{lemma}
+    \label{lem:eig_bound}
+    Under a belief $\Gig(\lambda \given \nu, a, b)$ with $a, b > 0$, $\nu \in \mathbb{R}$, mean $\mu$ and variance $V$, every design with $f(u) > 0$ has
+    %
+    \begin{equation}
+        0 < G(u) \leq f(u) \frac{V}{\mu} < \frac{2 f(u)}{b} \,.
+        \label{eq:eig_bound}
+    \end{equation}
+\end{lemma}
+
+\begin{proof}
+    For the last inequality, \eqref{eq:gig_moments} gives $V / \mu = \eta (R_{\nu + 1} - R_{\nu})$.
+    Subtracting \eqref{eq:ratio_recursion} at order $\nu$ from the same at order $\nu + 1$ gives $R_{\nu + 1} - R_{\nu} = 2/\omega + 1/R_{\nu} - 1/R_{\nu - 1}$.
+    This is below $2/\omega$, because $R_{\nu} / R_{\nu - 1} = K_{\nu + 1} K_{\nu - 1} / K_{\nu}^{2}$ exceeds $1$ for every real $\nu$ \citep[Theorem~4.1]{jorgensen1982statistical}, so $V / \mu < 2 \eta / \omega = 2 / b$.
+
+    For the middle inequality, let $Q = \mathcal{P}(y \given f(u) \mu)$.
+    Then $D_{\text{KL}}[\mathcal{P}(y \given f(u) \lambda) \,\|\, Q] = f(u) \big( \lambda \log(\lambda / \mu) - \lambda + \mu \big)$, which $\log x \leq x - 1$ bounds by $f(u) (\lambda - \mu)^{2} / \mu$, with expectation $f(u) V / \mu$ under the belief.
+    Write \eqref{eq:eig} as $\Ex{p(\lambda \given \mathcal{D})}{D_{\text{KL}}[\mathcal{P}(y \given f(u) \lambda) \,\|\, p(y \given u, \mathcal{D})]}$, which is the same mutual information.
+    Adding and subtracting $\log Q(y)$ inside the divergence gives
+    %
+    \begin{equation*}
+        G(u) = \Ex{p(\lambda \given \mathcal{D})}{D_{\text{KL}}\big[ \mathcal{P}\big(y \given f(u) \lambda\big) \,\|\, Q \big]} - D_{\text{KL}}\big[ p(y \given u, \mathcal{D}) \,\|\, Q \big] \leq f(u) \frac{V}{\mu} \,,
+    \end{equation*}
+    %
+    since the first term is finite by the bound just given and the second is non-negative.
+
+    For the first inequality, $G(u) = 0$ would make $y$ independent of $\lambda$.
+    It is not, because $p(y = 0 \given \lambda, u) = \exp(-f(u) \lambda)$ is strictly decreasing in $\lambda$ and the belief is not a point mass.
+\end{proof}
+
+\begin{proof}[Proof of Proposition~\ref{prop:starvation}]
+    Let $\bar{r} = \max_{u \in \mathcal{U}} f(u) / c(u)$ and $\underline{f} = \min_{u \in \mathcal{U}} f(u)$, both finite and positive because $\mathcal{U}$ is finite.
+    After $t$ steps context $k$ holds the belief $\Gig(\lambda_k \given \nu_{k,t}, a_k, b_{k,t})$ with $b_{k,t} = b_k + 2 F_{k,t}$, whatever counts it has returned.
+    Write $G_t$ for \eqref{eq:eig} under the beliefs after $t$ steps, so that $u_{t + 1}$ maximises $G_t(u) / c(u)$.
+    Because the beliefs factorise, $G_t(u)$ for $u \in \mathcal{U}_k$ depends on the belief at context $k$ alone.
+    Lemma~\ref{lem:eig_bound} holds at every order, so for every $t$ and every $u \in \mathcal{U}_k$,
+    %
+    \begin{equation}
+        0 < \frac{G_t(u)}{c(u)} < \frac{2 \bar{r}}{b_{k,t}} \,.
+        \label{eq:score_envelope}
+    \end{equation}
+
+    Let $A$ be the set of contexts selected infinitely often, which is not empty because one of finitely many contexts is selected at every step.
+    Suppose that some context $j$ is not in $A$.
+    Then there is a step $t_0$ after which no context outside $A$ is selected.
+    The belief at $j$ is therefore the same at every $t \geq t_0$, and so are the scores of $\mathcal{U}_j$, the largest of which, $\iota = \max_{u \in \mathcal{U}_j} G_{t_0}(u) / c(u)$, is positive by \eqref{eq:score_envelope}.
+    Every selection at context $k$ raises $b_{k,t}$ by at least $2 \underline{f}$, so $b_{k,t} \to \infty$ for every $k \in A$.
+    Since $A$ is finite and $b_{k,t}$ is non-decreasing in $t$, there is a $t_1 \geq t_0$ with $2 \bar{r} / b_{k,t} < \iota$ for every $k \in A$ and every $t \geq t_1$.
+    For $t \geq t_1$, \eqref{eq:score_envelope} then puts every design at a context in $A$ below $\iota$, which some design at $j$ attains, so $u_{t + 1}$ is at a context outside $A$.
+    This contradicts the choice of $t_0$, so $A$ contains every context.
+    Each of the infinitely many selections at context $k$ adds at least $\underline{f}$ to $F_{k,t}$, so $F_{k,t} \to \infty$.
+
+    The last claim is Proposition~\ref{prop:consistency} at each context.
+    Its proof carries over with $\mathcal{F}_t$ generated by the data of all contexts and with $f_i$ and $y_i$ set to zero at the steps that select another context, since the policy is adapted to this filtration when ties are broken without reference to future counts.
+\end{proof}
+
+\section{Proof of Lemma~\ref{lem:sichel_tail}}
+\label{appx:sichel_tail}
+
+\begin{proof}
+    For (i), fix $z > 0$. The normalising constant of \eqref{eq:gig} gives $K_{\kappa}(z) = \tfrac{1}{2} \int_{0}^{\infty} s^{\kappa - 1} e^{-z(s + 1/s)/2} \, ds$, and substituting $s = 2t/z$,
+    %
+    \begin{equation*}
+        K_{\kappa}(z) = \tfrac{1}{2} \Gamma(\kappa) \Big( \frac{2}{z} \Big)^{\kappa} \, \mathbb{E}\big[ e^{-z^{2} / (4 T_{\kappa})} \big] \,,
+    \end{equation*}
+    %
+    where $T_{\kappa}$ is gamma distributed with shape $\kappa$ and unit rate.
+    As $\kappa \to \infty$, $T_{\kappa} \to \infty$ in probability and the integrand is bounded by $1$, so the expectation tends to $1$ and $K_{\kappa}(z) = \tfrac{1}{2} \Gamma(\kappa) (2/z)^{\kappa} (1 + o(1))$.
+    Applied to \eqref{eq:sichel} at $\kappa = \nu + y$ and $z = \omega_u$, and using $\eta_u / \omega_u = 1/(b + 2f)$, this gives
+    %
+    \begin{equation*}
+        p(y \given u, \mathcal{D}) = \Big( \frac{2 f \eta_u}{\omega_u} \Big)^{y} \frac{\Gamma(\nu + y)}{\Gamma(y + 1)} \Big( \frac{2 \eta_u}{\eta \, \omega_u} \Big)^{\nu} \frac{1 + o(1)}{2 K_{\nu}(\omega)}
+        = (1 - q) \, C \, y^{\nu - 1} q^{y} \big(1 + o(1)\big) \,,
+    \end{equation*}
+    %
+    since $\Gamma(\nu + y) / \Gamma(y + 1) = y^{\nu - 1}(1 + o(1))$.
+    Successive terms of this form have ratio $q (1 + 1/y)^{\nu - 1} \to q < 1$, so summing from $y$ to infinity gives the stated $\bar{F}(y)$.
+    The negative binomial with shape $r$ and success probability $\beta / (\beta + f)$ has mass function $\binom{y + r - 1}{y} (\beta/(\beta + f))^{r} q_{\Gamma}^{y}$, and the same argument applies.
+
+    For (ii), the predictive mean and variance are $f \mu$ and $f \mu + f^{2} V$, so matching them at one exposure matches $\mu$ and $V$, and so matches them at every exposure.
+    A gamma prior with mean $\mu$ and variance $V$ has rate $\beta = \mu / V$.
+    The proof of Lemma~\ref{lem:eig_bound} shows $V / \mu < 2 / b$, which is $b < 2 \beta$, so $q = 2f/(b + 2f) > 2f/(2\beta + 2f) = q_{\Gamma}$.
+    By (i), the ratio $\bar{F}(y) / \bar{F}_{\Gamma}(y)$ equals a positive constant times $y^{\nu - r} (q / q_{\Gamma})^{y} (1 + o(1))$, which diverges.
+    For the crossing, $\bar{F}(0) = \bar{F}_{\Gamma}(0) = 1$ and $\sum_{y \geq 1} \bar{F}(y) = f \mu = \sum_{y \geq 1} \bar{F}_{\Gamma}(y)$, the predictive mean of a count.
+    The difference $\bar{F}(y) - \bar{F}_{\Gamma}(y)$ is therefore positive for all large $y$ and sums to zero over $y \geq 1$, so it is negative for some $y \geq 1$.
+
+    For (iii), \eqref{eq:posterior} gives $b + 2F$ whatever the counts, and the gamma posterior has rate $\beta + F$.
+    Substituting both into the rates of (i) gives the display, and $2\beta - b > 0$ by (ii).
+\end{proof}
+
+\section{Proof of Proposition~\ref{prop:regret}}
+\label{appx:regret}
+
+\begin{lemma}[Pairwise reduction]
+    \label{lem:pairwise}
+    For every realisation, $\Lambda^{*} R_t \leq \sum_{i \in S^{*}} \sum_{j \notin S^{*}} (\lambda^{*}_i - \lambda^{*}_j) \, \mathbb{I}\{\mu_{j,t} \geq \mu_{i,t}\}$.
+\end{lemma}
+
+\begin{proof}
+    The sets $S^{*} \setminus S_t$ and $S_t \setminus S^{*}$ have equal size, so a bijection $\sigma$ matches them, and $\Lambda^{*} R_t = \sum_{i \in S^{*} \setminus S_t} (\lambda^{*}_i - \lambda^{*}_{\sigma(i)})$.
+    Each term is non-negative, because $i \in S^{*}$ and $\sigma(i) \notin S^{*}$, and has $\mu_{\sigma(i),t} \geq \mu_{i,t}$, because $\sigma(i)$ is selected and $i$ is not.
+    So each term appears on the right-hand side, whose other terms are non-negative.
+\end{proof}
+
+\begin{lemma}[Bounds on the posterior mean]
+    \label{lem:mean_bounds}
+    The mean $\mu$ of a belief $\Gig(\lambda \given \nu, a, b)$ with $a, b > 0$ satisfies
+    %
+    \begin{equation}
+        g(\nu) < \mu \leq g(\nu + \epsilon) \,, \qquad g(\alpha) = \frac{\alpha + \sqrt{\alpha^{2} + ab}}{b} \,,
+        \label{eq:mean_bounds}
+    \end{equation}
+    %
+    with $\epsilon = \max(\tfrac{1}{2}, -\nu)$.
+\end{lemma}
+
+\begin{proof}
+    Let $\rho_{\alpha}(z) = (\alpha + \sqrt{\alpha^{2} + z^{2}}) / z$.
+    By Lemma~\ref{lem:gig_moments}, $\mu = \eta R_{\nu}(\omega)$ and $g(\alpha) = \eta \rho_{\alpha}(\omega)$, so both bounds are statements about $R$.
+    For the lower bound, Eq.~(A.17) of \citet{jorgensen1982statistical} gives $R_{\nu} = \nu / \omega + \sqrt{\nu^{2} / \omega^{2} + D_{\nu}}$ with $D_{\nu} = R_{\nu} / R_{\nu - 1}$, and $D_{\nu} > 1$ by his Theorem~4.1, so $R_{\nu}(\omega) > \rho_{\nu}(\omega)$.
+
+    For the upper bound, fix $\alpha > -\tfrac{1}{2}$ and write $c = \alpha + \tfrac{1}{2}$ and $\rho = \rho_{c}$, which is strictly decreasing and exceeds $1$.
+    By Eq.~(A.23) of \citet{jorgensen1982statistical}, $R = R_{\alpha}$ solves $R' = R^{2} - (2c / z) R - 1$, whose right-hand side is positive for $R > \rho$ and negative for $0 < R < \rho$.
+    Suppose that $R(z_1) \geq \rho(z_1)$ for some $z_1$.
+    Wherever $R = \rho$ we have $R' = 0 > \rho'$, so $R > \rho$ on $(z_1, \infty)$, and there $R' > 0$.
+    Then $R(z) > \rho(z_1) > 1$ for all $z > z_1$, which contradicts $R_{\alpha}(z) \to 1$ as $z \to \infty$, his Eq.~(A.21).
+    Hence $R_{\alpha} < \rho_{\alpha + 1/2}$, which is the upper bound for $\nu > -\tfrac{1}{2}$.
+    The same equation gives $R_{\alpha} > 1$, since its right-hand side is negative wherever $0 < R \leq 1$, so $R$ could not return to its limit $1$.
+    For $\nu = -\tfrac{1}{2}$, $R_{\nu} = 1 = \rho_{0}$ by his Eq.~(A.1).
+    For $\nu < -\tfrac{1}{2}$, his Eq.~(A.15) gives $R_{\nu} = 1 / R_{-\nu - 1}$ with $-\nu - 1 > -\tfrac{1}{2}$, so $R_{\nu} < 1 = \rho_{\nu + \epsilon}$.
+    \claude{Bounds of this form for $K_{\nu+1}/K_{\nu}$ are studied by Segura (2011, J.\ Math.\ Anal.\ Appl.\ 374). If that paper states the upper bound, cite it and drop its proof here.}
+\end{proof}
+
+\begin{proof}[Proof of Proposition~\ref{prop:regret}]
+    Taking expectations in Lemma~\ref{lem:pairwise} gives \eqref{eq:regret_bound}, so it remains to prove \eqref{eq:misranking}.
+    Fix a context $k$ and $\theta \in \mathbb{R}$, and let $M_s = \exp\big(\theta T_{k,s} - \lambda^{*}_k F_{k,s} (\exp(\theta) - 1)\big)$ after $s$ steps.
+    Given the past, a step at context $k$ with exposure $f$ multiplies $M$ by $\exp\big(\theta y - \lambda^{*}_k f (\exp(\theta) - 1)\big)$ with $y \sim \mathcal{P}(f \lambda^{*}_k)$, whose expectation is $1$, and a step elsewhere leaves $M$ unchanged.
+    So $M$ is a martingale with $M_0 = 1$, and optional stopping at the bounded time $t$ gives $\mathbb{E}[M_t] = 1$.
+
+    The event $\mu_{j,t} \geq \mu_{i,t}$ implies $\mu_{i,t} \leq x$ or $\mu_{j,t} \geq x$.
+    The posterior of context $k$ is $\Gig(\lambda \given \nu_k + T_{k,t}, a_k, b_k + 2 F_{k,t})$, and $g$ of Lemma~\ref{lem:mean_bounds}, at the second scale $b_k + 2 F_{k,t}$, is increasing with $g(\alpha) = x$ at $\alpha = x (b_k / 2 + F_{k,t}) - a_k / (2x)$.
+    So $g(\nu_k + T_{k,t} + e) \geq x$ exactly when $T_{k,t} \geq x F_{k,t} - \delta_k(x) - e$, for any shift $e$.
+    The shift of Lemma~\ref{lem:mean_bounds} at the posterior order $\nu_j + T_{j,t} \geq \nu_j$ is at most $\epsilon_j$, and $g$ is increasing, so $\mu_{j,t} \leq g(\nu_j + T_{j,t} + \epsilon_j)$.
+    By Lemma~\ref{lem:mean_bounds}, $\mu_{i,t} \leq x$ therefore implies $T_{i,t} < x F_{i,t} - \delta_i(x)$, and $\mu_{j,t} \geq x$ implies $T_{j,t} \geq x F_{j,t} - \delta_j(x) - \epsilon_j$.
+    On the first event take $k = i$ and $\theta = \log(x / \lambda^{*}_i) < 0$.
+    Then $\theta T_{i,t} > \theta (x F_{i,t} - \delta_i(x))$, so $M_t > \exp\big(F_{i,t} \, d(x, \lambda^{*}_i) - \theta \delta_i(x)\big) \geq \exp\big(\phi_i \, d(x, \lambda^{*}_i) - \theta \delta_i(x)\big)$, and Markov's inequality gives the first term of \eqref{eq:misranking}.
+    On the second take $k = j$ and $\theta = \log(x / \lambda^{*}_j) > 0$, and the same steps with $\delta_j(x) + \epsilon_j$ in place of $\delta_i(x)$ give the second term.
+\end{proof}
+
+\begin{proof}[Proof of Corollary~\ref{cor:regret_gamma}]
+    The posterior of context $k$ is a gamma law of shape $\nu_k + T_{k,t}$ and rate $b_k / 2 + F_{k,t}$, with mean $(\nu_k + T_{k,t}) / (b_k / 2 + F_{k,t})$.
+    So $\mu_{i,t} \leq x$ exactly when $T_{i,t} \leq x F_{i,t} - \delta_i(x)$, and $\mu_{j,t} \geq x$ exactly when $T_{j,t} \geq x F_{j,t} - \delta_j(x)$, with $a_k = 0$ in \eqref{eq:prior_counts}.
+    The proof of Proposition~\ref{prop:regret} then applies with $\epsilon_j = 0$.
+\end{proof}
+
+\begin{remark}[The Chernoff exponent]
+    \label{rem:chernoff}
+    Write $A_i(x)$ and $A_j(x)$ for the two terms of \eqref{eq:misranking}, so that $A_i(\lambda^{*}_i) = A_j(\lambda^{*}_j) = 1$.
+    For every grid $\lambda^{*}_j = x_0 < x_1 < \dots < x_n = \lambda^{*}_i$,
+    %
+    \begin{equation}
+        \Pr(\mu_{j,t} \geq \mu_{i,t}) \leq A_i(x_0) + \sum_{k=1}^{n} A_i(x_k) A_j(x_{k-1}) + A_j(x_n) \,.
+        \label{eq:misranking_grid}
+    \end{equation}
+    %
+    To see this, split the event by the cell of $\mu_{i,t}$ among $(-\infty, x_0]$, $(x_{k-1}, x_k]$ and $(x_n, \infty)$.
+    On a middle cell $\mu_{i,t} \leq x_k$ and $\mu_{j,t} > x_{k-1}$, and the product of the martingales of $i$ and $j$, at $x_k$ and $x_{k-1}$, is again a martingale because each step samples one context.
+    With a mesh $h$, every exponent in \eqref{eq:misranking_grid} is at least $\Phi_{ij} - \min(\phi_i, \phi_j) \, h \log(\lambda^{*}_i / \lambda^{*}_j)$, where $\Phi_{ij} = \min_x [\phi_i \, d(x, \lambda^{*}_i) + \phi_j \, d(x, \lambda^{*}_j)]$ is the Chernoff exponent of the pair.
+    A mesh of order $1 / \min(\phi_i, \phi_j)$ therefore attains $\Phi_{ij}$, at the cost of a prefactor linear in $\min(\phi_i, \phi_j)$, so at small exposures \eqref{eq:misranking} can be the smaller bound.
+    Let $\Psi_{ij}$ be the exponent of \eqref{eq:misranking} at its best $x$, where its two exponents cross.
+    Since one of them decreases in $x$ and the other increases, $\Psi_{ij} \leq \Phi_{ij} \leq 2 \Psi_{ij}$.
+\end{remark}
+
+
+\end{document}

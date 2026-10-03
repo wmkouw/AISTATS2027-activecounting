@@ -64,14 +64,18 @@ class Agent(object):
 
     # -- belief ------------------------------------------------------------
 
-    def reset(self, env, prior_moments, recovery):
+    def reset(self, env, prior_moments, recovery, rng=None):
         """Express the shared prior information in this agent's own family.
 
         An environment that has a population of comparable rates to hand supplies
         ``initial_beliefs`` and each family is fitted to it; otherwise every family is
         matched to the same two moments. Either way the information is the same for
         everyone and no agent is told the truth.
+
+        ``rng`` seeds a model that draws random numbers of its own, such as a sampler.
         """
+        if rng is not None and hasattr(self.model, "set_rng"):
+            self.model.set_rng(rng)
         if hasattr(env, "initial_beliefs"):
             self.beliefs = env.initial_beliefs(self.model)
         else:
@@ -87,6 +91,9 @@ class Agent(object):
 
     def rate_mean(self, k):
         return self.model.rate_mean(self.beliefs[k])
+
+    def rate_map(self, k):
+        return self.model.rate_map(self.beliefs[k])
 
     def logpmf(self, k, f, y):
         return self.model.logpmf(self.beliefs[k], f, y)
